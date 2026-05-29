@@ -1,0 +1,48 @@
+const fastify = require("fastify")({
+    logger: false
+})
+
+fastify.get("/ping", async () => {
+    return "pong"
+})
+
+fastify.get("/json-small", async () => {
+    return {
+        id: 1,
+        name: "Test",
+        active: true
+    }
+})
+
+fastify.get("/json-large", async () => {
+    return Array.from({ length: 1000 }, (_, i) => ({
+        id: i,
+        name: `Item ${i}`,
+        value: i * 10
+    }))
+})
+
+fastify.get("/cpu", async () => {
+    const crypto = require("crypto")
+
+    let data = Buffer.from("benchmark")
+
+    for (let i = 0; i < 100000; i++) {
+        data = crypto
+            .createHash("sha256")
+            .update(data)
+            .digest()
+    }
+
+    return "done"
+})
+
+fastify.get("/async-delay", async () => {
+    await new Promise(r => setTimeout(r, 10))
+    return "ok"
+})
+
+fastify.listen({
+    host: "0.0.0.0",
+    port: 8080
+})

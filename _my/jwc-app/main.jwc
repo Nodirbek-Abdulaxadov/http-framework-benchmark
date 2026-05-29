@@ -1,0 +1,53 @@
+// jwc-app benchmark — updated for JWC v0.4.0.
+//
+// v0.4.0 closed the two gaps that previously forced workarounds:
+//   * /json-large now builds the 1000-object array per request with array
+//     literals + push (true parity with the other stacks), instead of the
+//     old precompute-once-and-cache string-concat trick.
+//   * /cpu now runs real SHA-256 like every other stack, instead of the LCG
+//     arithmetic substitute.
+
+route GET "/ping" {
+    return "pong";
+}
+
+route GET "/json-small" {
+    return json({
+        id: 1,
+        name: "Test",
+        active: true
+    });
+}
+
+// Build an array of 1000 objects per request and serialize it — same workload
+// as the other frameworks (loop + serialize). Array literal + push are v0.4.0.
+route GET "/json-large" {
+    let items = [];
+    let i = 0;
+    while (i < 1000) {
+        push(items, { id: i, name: "Item " + i, value: i * 10 });
+        i = i + 1;
+    }
+    return json(items);
+}
+
+// CPU-bound workload: 100,000 chained SHA-256 hashes, matching the other
+// stacks (~30 ms/req with SHA-NI). v0.4.0 added a native sha256() builtin.
+route GET "/cpu" {
+    let h = "seed";
+    let i = 0;
+    while (i < 100000) {
+        h = sha256(h);
+        i = i + 1;
+    }
+    return h;
+}
+
+route GET "/async-delay" {
+    await sleep_ms(10);
+    return "ok";
+}
+
+function main() {
+    serve(8080);
+}
