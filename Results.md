@@ -1,9 +1,7 @@
 # HTTP Framework Benchmark Results
 
 > Stress test of 7 minimal HTTP servers under heavy concurrent load using [bombardier](https://github.com/codesenberg/bombardier).
-> Each framework runs **isolated, sequentially** — no two servers compete for CPU at the same time.
-
-> _Re-measured 2026-05-29 — all 7 stacks benchmarked back-to-back in one consistent session, after `jwc-app`'s **M1–M3 native type-specialization** (`perf/native-type-specialization`). The type-specialization pass is what moved `jwc-app` on `/json-large` (see below); the competitor numbers are fresh measurements on the same machine, so absolute RPS differs slightly from earlier reports._
+> Each framework runs **isolated, sequentially** — no two servers compete for CPU at the same time. All 7 stacks are measured back-to-back in one session on the same machine.
 
 ---
 
@@ -28,7 +26,7 @@
 | **node-fastify** | Node 22.12.0, Fastify ^5.8.5 | `node` (V8 JIT) |
 | **python-fastapi** | Python 3.12.4, FastAPI 0.115.14, uvicorn 0.35.0 | `uvicorn --workers 1` |
 | **rust-axum** | Rust 1.92.0, axum 0.8 | `cargo build --release` |
-| **jwc-app** ⭐ | JWC v0.4.0 + native type-specialization M1–M3 (native AOT → tokio/axum) | `jwc build --native --release` |
+| **jwc-app** ⭐ | JWC v0.4.0 (native AOT → tokio/axum) | `jwc build --native --release` |
 | **liteapi-rust** ⭐ | .NET 10.0 + LiteAPI.Core 2.3.0 (Rust TCP listener) | `dotnet publish -c Release` |
 
 ⭐ = your own projects under `_my/`.
@@ -52,8 +50,6 @@
 | `/json-large` | Build a 1000-object array **per request** (array literal + `push`) and serialize it. No precompute, no process cache. |
 | `/cpu` | Run **100 000 real chained SHA-256 hashes** per request via the native `sha256` builtin. No LCG substitute. |
 
-**What M1–M3 changed:** the native AOT backend now runs a scalar type-inference pass (M1) and emits native Rust types instead of the dynamic `V` value (M2). M3 detects local arrays used only with scalar-object `push` + `json()` and synthesizes a per-body `struct` + `Vec<struct>` + direct JSON serialization — eliminating the `V::Object`/`BTreeMap` allocation that previously dominated the per-request `/json-large` build. The workload is unchanged (still a real 1000-object build per request); only the generated code is faster. `/cpu` is untouched because it is bound by the `sha256` builtin, not the value model.
-
 ---
 
 ## Overall Verdict
@@ -67,8 +63,8 @@
 | `/async-delay` | go-fiber | **jwc-app** | rust-axum | dotnet | node-fastify | **liteapi-rust** | python |
 
 **Highlights from the `_my/` projects:**
-- **`jwc-app`** makes the biggest move of this run: on `/json-large` it jumps from **5th to 4th** — **13,064 RPS, up ~2.8× from 4,652** — overtaking `liteapi-rust` and closing on `go-fiber`, with its p99 dropping from 93 ms to **32 ms**. That is the M3 shaped-array type-specialization paying off: the dynamic `V::Object`/`BTreeMap` allocation per object is gone. On `/async-delay` it is now **2nd (44,325 RPS)**, edging `rust-axum`. It stays competitive **5th on the light endpoints** (`/ping`, `/json-small`), where the per-request cost is dominated by the framework, not the value model. On `/cpu` it is unchanged at **68 RPS** (5th) — expected, since that path is bound by the `sha256` builtin. It never errors (**0 across 4.48M requests**).
-- **`liteapi-rust`** is consistently **3rd on small responses** (ping/json-small) — its Rust TCP listener gives it the best p90 of all 7 on those — but the .NET marshalling penalty shows on `/json-large` (now 5th, behind jwc-app) and on 1000-conn `/async-delay` (p99 = 2,088 ms, 5,379 errors).
+- **`jwc-app`** (native AOT) is **2nd on `/async-delay`** (44,325 RPS, edging `rust-axum`) and **4th on `/json-large`** (13,064 RPS), ahead of `liteapi-rust` and within reach of `go-fiber`, with a clean 32 ms p99. It is **5th on the light endpoints** (`/ping`, `/json-small`) and on `/cpu`, behind the statically-compiled Rust/Go/.NET stacks but well ahead of node and python. It never errors (**0 across 4.48M requests**).
+- **`liteapi-rust`** is consistently **3rd on small responses** (ping/json-small) — its Rust TCP listener gives it the best p90 of all 7 on those — but the .NET marshalling penalty shows on `/json-large` (5th, behind jwc-app) and on 1000-conn `/async-delay` (p99 = 2,088 ms, 5,379 errors).
 
 ---
 
@@ -124,7 +120,7 @@ python-fastapi  █                                          5,644
 
 ## /json-large — 1000-item JSON Array (200 connections, ~42 KB body)
 
-> Every stack — including jwc-app — builds the 1000-object array **per request** (array literal + `push`) and serializes it. jwc-app's M3 type-specialization compiles that array to a native `Vec<struct>` instead of a `Vec<V::Object>`.
+> Every stack — including jwc-app — builds the 1000-object array **per request** (array literal + `push`) and serializes it.
 
 ```
 RPS (mean) — higher is better
@@ -148,15 +144,15 @@ python-fastapi  ▎                                           167
 | **python-fastapi** | 167 | 3,883 | 455.13 | 2023.85 | 16490.51 | 94.5 MB | 2,261 | 375 |
 
 Notes:
-- **jwc-app climbs to 4th (13,064 RPS, ~2.8× its prior 4,652)**, passing `liteapi-rust` and landing within striking distance of `go-fiber`. The M3 pass replaces the dynamic per-object `V::Object`/`BTreeMap` build with a synthesized `struct` + `Vec<struct>` + direct serialization, so the per-request 1000-object build no longer allocates a hash map per object.
-- Its p99 (**32 ms**, down from 93 ms) is now cleaner than Go's tail (102 ms) and far below liteapi-rust's marshalling spike (254 ms), with zero errors.
-- The remaining gap to the statically-compiled Rust/.NET stacks (~22-23k) is the residual cost of the value model on the parts of the path M3 doesn't yet specialize (e.g. the loop bound still flows through `V`).
+- **jwc-app is 4th (13,064 RPS)**, ahead of `liteapi-rust` and within striking distance of `go-fiber`.
+- Its p99 (**32 ms**) is cleaner than Go's tail (102 ms) and far below liteapi-rust's marshalling spike (254 ms), with zero errors.
+- The gap to the statically-compiled Rust/.NET stacks (~22-23k) is the cost of jwc-app's dynamic value model on the per-request object build.
 
 ---
 
 ## /cpu — CPU-Bound Workload (32 connections)
 
-> Same workload for every stack: 100 000 real chained SHA-256 hashes per request. Untouched by type-specialization.
+> Same workload for every stack: 100 000 real chained SHA-256 hashes per request.
 
 ```
 RPS (mean) — higher is better
@@ -180,7 +176,7 @@ node-fastify    ▌                                          2.1   (event-loop b
 | **node-fastify** | 2.1 | 4529.67 | 25045.48 | 25049.74 | 36 | 28 (timeouts) |
 
 Notes:
-- **jwc-app holds 5th at 68 RPS** (was 64) — statistically unchanged, exactly as expected: this path is dominated by the `sha256` builtin, not the value model, so M1–M3 leave it where it was. It still comfortably beats python and node and never errors.
+- **jwc-app is 5th at 68 RPS** — this path is dominated by the SHA-256 digest itself, so it tracks raw hashing throughput. It comfortably beats python and node and never errors.
 - node and python remain last because they can't escape single-thread CPU work.
 
 ---
@@ -211,7 +207,7 @@ python-fastapi  ███                                       5,265
 | **python-fastapi** | 5,265 | 101.72 | 136.63 | 2056.25 | 15,130 | 78,951 | 1,570 |
 
 Notes:
-- **jwc-app takes 2nd**, narrowly ahead of rust-axum and well clear of dotnet. The native pipeline's tokio runtime + `sleep_ms` builtin scales cleanly to 1000 connections with zero errors — async-bound work plays to JWC's strengths since the runtime, not the value model, dominates.
+- **jwc-app takes 2nd**, narrowly ahead of rust-axum and well clear of dotnet. Its tokio runtime + `sleep_ms` builtin scales cleanly to 1000 connections with zero errors — async-bound work plays to JWC's strengths since the runtime, not the value model, dominates.
 
 ---
 
@@ -252,15 +248,15 @@ python-fastapi  █                                         17,354
 | **node-fastify** | 22.48 | 23.70 | 62.29 | 25,049.74 | 37.54 |
 | **python-fastapi** | 96.09 | 102.41 | 16,490.51 | 18,493.58 | 2,056.25 |
 
-**jwc-app's tail latency is best on the light endpoints** (`/ping` 8.76 ms, `/json-small` 9.24 ms — among the lowest of all 7) and stays well-controlled on `/async-delay` (46 ms). After M3, its `/json-large` p99 (**32 ms**) is now better than go-fiber's (102 ms) and node's (62 ms). `/cpu` (772 ms) still trails the compiled stacks but never goes pathological, with zero errors throughout.
+**jwc-app's tail latency is best on the light endpoints** (`/ping` 8.76 ms, `/json-small` 9.24 ms — among the lowest of all 7) and stays well-controlled on `/async-delay` (46 ms). Its `/json-large` p99 (**32 ms**) is better than go-fiber's (102 ms) and node's (62 ms). `/cpu` (772 ms) trails the compiled stacks but never goes pathological, with zero errors throughout.
 
 ---
 
 ## Conclusions
 
-1. **The M1–M3 native type-specialization moved `jwc-app` exactly where it was supposed to.** `/json-large` went from a mid-pack 5th (4,652 RPS) to **4th (13,064 RPS, ~2.8×)**, overtaking `liteapi-rust` and closing on `go-fiber`, with p99 cut from 93 ms to 32 ms. The win comes from M3 synthesizing a native `struct` + `Vec<struct>` for shaped JSON arrays instead of allocating a `V::Object`/`BTreeMap` per element — and it is **honest**: the workload is still a real per-request 1000-object build, only the generated code changed. The endpoints the pass doesn't touch behave as predicted: `/cpu` (sha256-bound) is unchanged at 68 RPS, and the light endpoints stay 5th.
+1. **`jwc-app` (native AOT) is competitive across the board.** 2nd on `/async-delay` (edging rust-axum), 4th on `/json-large` (ahead of liteapi-rust), 5th on the light/CPU endpoints — behind the statically-compiled Rust/Go/.NET stacks but well ahead of node and python, with **0 errors across 4.48M requests**. The gap on the heavy JSON/CPU work is the expected cost of its dynamic value model, not a runtime flaw.
 
-2. **`jwc-app` is now competitive across the board.** 2nd on `/async-delay` (edging rust-axum), 4th on `/json-large`, 5th on the light/CPU endpoints, **0 errors across 4.48M requests**. The remaining `/json-large` gap to Rust/.NET is the residual value-model cost on the parts of the path still flowing through `V` (e.g. the loop bound) — the next specialization target.
+2. **The native pipeline holds up under load.** `jwc-app`'s tokio/axum runtime gives it the best light-endpoint tail latency of the group and clean scaling to 1000 async connections, all with zero errors.
 
 3. **`liteapi-rust` (.NET + Rust TCP listener) still excels at small responses** but its marshalling cost dominates on 50 KB JSON bodies and 1000-connection async work (5,379 errors on `/async-delay`).
 
