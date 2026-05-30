@@ -9,7 +9,8 @@ $servers = @(
     @{ Name='python-fastapi'; Dir="$ROOT\python-fastapi";    Cmd='python -m uvicorn main:app --host 0.0.0.0 --port 8080 --workers 1 --log-level warning'; Port=8080 },
     @{ Name='rust-axum';      Dir="$ROOT\rust-axum";         Cmd='./target/release/benchmark.exe'; Port=8080 },
     @{ Name='jwc-app';        Dir="$ROOT\_my\jwc-app";       Cmd='./.jwc-build/target/release/jwc-app.exe'; Port=8080 },
-    @{ Name='liteapi-rust';   Dir="$ROOT\_my\liteapi-rust";  Cmd='dotnet ./publish/liteapi-rust.dll'; Port=6080 }
+    @{ Name='liteapi-rust';    Dir="$ROOT\_my\liteapi-rust"; Cmd='dotnet ./publish/liteapi-rust.dll';    Port=6080 },
+    @{ Name='liteapi-managed'; Dir="$ROOT\_my\liteapi";      Cmd='dotnet ./publish/liteapi-managed.dll'; Port=6070 }
 )
 
 foreach ($s in $servers) {
