@@ -3,6 +3,8 @@
 > Stress test of 8 minimal HTTP servers under heavy concurrent load using [bombardier](https://github.com/codesenberg/bombardier).
 > Each framework runs **isolated, sequentially** — no two servers compete for CPU at the same time. All stacks are measured back-to-back in one session on the same machine.
 
+> **Update (jwc-app v0.4.1, Phase A perf):** JWC shipped [v0.4.1](https://github.com/Nodirbek-Abdulaxadov/jwc-lang/releases/tag/v0.4.1) — a performance-only release implementing Phase A of [`PERF_PLAN.md`](https://github.com/Nodirbek-Abdulaxadov/jwc-lang/blob/main/PERF_PLAN.md). Re-bench against this binary on the same machine (bombardier 15s @ warmup 3s) shows: `/ping` 123,256 → 133,024 (+7.9%), `/json-small` 117,729 → 129,032 (+9.6%), `/json-large` 13,064 → 13,900 (+6.4%), `/cpu` 68 → 123 (**+81%**, closing the rust-axum gap from 2.80× to 1.55×). The tables and bar charts below remain the v0.4.0 cross-stack snapshot; a full re-bench session against every stack is the next update.
+
 ---
 
 ## Test Environment
@@ -26,7 +28,7 @@
 | **node-fastify** | Node 22.12.0, Fastify ^5.8.5 | `node` (V8 JIT) |
 | **python-fastapi** | Python 3.12.4, FastAPI 0.115.14, uvicorn 0.35.0 | `uvicorn --workers 1` |
 | **rust-axum** | Rust 1.92.0, axum 0.8 | `cargo build --release` |
-| **jwc-app** ⭐ | JWC v0.4.0 (native AOT → tokio/axum) | `jwc build --native --release` |
+| **jwc-app** ⭐ | JWC v0.4.1 (native AOT → tokio/axum) | `jwc build --native --release` |
 | **liteapi-rust** ⭐ | .NET 10.0 + LiteAPI.Core 2.3.0 (Rust TCP listener — `RunWithRust()`) | `dotnet publish -c Release` |
 | **liteapi-managed** ⭐ | .NET 10.0 + LiteAPI.Core 2.3.0 (managed `Run()`) | `dotnet publish -c Release` |
 
