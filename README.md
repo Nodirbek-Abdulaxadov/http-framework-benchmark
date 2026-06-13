@@ -305,3 +305,42 @@ dotnet publish ./_my/liteapi      -c Release -o ./_my/liteapi/publish
 ```
 
 Raw bombardier JSON per endpoint is saved under `.dist/results/<server>/<endpoint>.json`; the merged summary is `.dist/results/summary.json`.
+
+### Run on a cloud server (Linux)
+
+The current published numbers are from a Windows desktop (i5-10400, 32 GB).
+Windows surfaces a lot of bombardier-side `dial tcp: actively refused`
+under high connection churn (ephemeral port exhaustion) that doesn't show
+up on Linux. For comparable cross-stack numbers, run on a clean Linux box
+with dedicated CPU:
+
+| Provider | SKU | Cores / RAM | Hourly |
+|---|---|---|---|
+| **Hetzner Cloud** | CCX33 (AMD dedicated) | 16 vCPU / 64 GB | ~€0.10 |
+| AWS EC2 | c7i.4xlarge | 16 vCPU / 32 GB | ~$0.71 |
+| DigitalOcean | CPU-Optimized 8GP | 8 vCPU / 16 GB | $0.36 |
+
+Recommended: Hetzner CCX33 — dedicated cores, hourly billing, one-line
+provision via cloud-init.
+
+**One-shot run** (pastes the suite onto a fresh Ubuntu 24.04 VM, builds
+every stack, benches, leaves results at `/opt/bench-results.tgz`):
+
+1. Create the VM with `.dist/cloud-init.yaml` as user data.
+2. Wait ~45 min (`tail -f /var/log/bench-setup.log` on SSH).
+3. `scp root@<ip>:/opt/bench-results.tgz .` and tear down the VM.
+
+**Manual / iterative**:
+
+```bash
+# On the Linux box, as root or via sudo:
+git clone https://github.com/Nodirbek-Abdulaxadov/http-framework-benchmark.git
+git clone https://github.com/Nodirbek-Abdulaxadov/jwc-lang.git /opt/jwc-lang
+cd http-framework-benchmark
+bash .dist/setup-linux.sh        # installs Go / Rust / .NET / Node / Python, builds all
+bash .dist/bench-all.sh          # 6 stacks × 5 endpoints × 15s ≈ 6 min wall-clock
+```
+
+Results land under `.dist/results/<stack>/<endpoint>.json` — same layout
+as the Windows PowerShell variant. Either run `.dist/report.ps1` from a
+Windows machine or write a small jq pipeline to roll them up.

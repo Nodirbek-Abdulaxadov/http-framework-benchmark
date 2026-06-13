@@ -1,0 +1,47 @@
+#cloud-config
+# Hetzner Cloud / AWS EC2 / DigitalOcean cloud-init for a one-shot bench
+# run. Paste this into the "user data" field when creating the VM:
+#
+#   Hetzner:        Add Server -> Cloud Config -> paste this file
+#   AWS EC2:        Advanced Details -> User data -> paste this file
+#   DigitalOcean:   Create Droplet -> Advanced Options -> User Data
+#
+# Image: Ubuntu 24.04 LTS minimal.
+#
+# What happens on boot:
+#   1. Clone the bench repo into /opt/bench.
+#   2. Clone jwc-lang into /opt/jwc-lang.
+#   3. Run .dist/setup-linux.sh (installs toolchains, builds every stack).
+#   4. Run .dist/bench-all.sh (benches every stack, 5 endpoints × 15s each).
+#   5. Tar the results and leave them at /opt/bench-results.tgz so you can
+#      grab them via `scp` before destroying the VM.
+#
+# Wall-clock on a Hetzner CCX33 (16 dedicated AMD vCPU, 64 GB):
+#   ~6 min setup + ~6 min per stack × 6 stacks ≈ 45 min total.
+#   Cost: ~€0.07 (CCX33 hourly).
+
+package_update: true
+packages:
+  - curl
+  - git
+  - jq
+  - tar
+
+write_files:
+  - path: /etc/profile.d/bench.sh
+    content: |
+      export PATH="$HOME/.cargo/bin:/usr/local/go/bin:$PATH"
+    permissions: '0644'
+
+runcmd:
+  - mkdir -p /opt
+  - cd /opt && git clone --depth 1 https://github.com/Nodirbek-Abdulaxadov/http-framework-benchmark.git bench
+  - cd /opt && git clone --depth 1 https://github.com/Nodirbek-Abdulaxadov/jwc-lang.git
+  - chmod +x /opt/bench/.dist/*.sh
+  - bash /opt/bench/.dist/setup-linux.sh 2>&1 | tee /var/log/bench-setup.log
+  - bash /opt/bench/.dist/bench-all.sh 2>&1 | tee /var/log/bench-run.log
+  - tar -czf /opt/bench-results.tgz -C /opt/bench/.dist results
+  - echo "BENCH COMPLETE. Results at /opt/bench-results.tgz" > /etc/motd
+  # Optional auto-shutdown: comment out the next line if you want to SSH in
+  # and poke around before the VM is destroyed.
+  # - shutdown -h +5 "Bench complete; auto-shutting down in 5 minutes"
