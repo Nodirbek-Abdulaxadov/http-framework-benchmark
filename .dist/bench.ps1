@@ -43,19 +43,25 @@ Write-Host "$Name started (took $($i*0.5)s)" -ForegroundColor Green
 # Warm-up
 & $BOMB -c 50 -d 3s -q "http://127.0.0.1:$Port/ping" | Out-Null
 
+# DB tier (/db, /queries, /updates) only meaningful when DATABASE_URL is wired
+# and the world table is seeded — see .dist/setup-linux.sh.
 $endpoints = @(
     @{ path='/ping';        c=500;  d='15s' },
     @{ path='/json-small';  c=500;  d='15s' },
     @{ path='/json-large';  c=200;  d='15s' },
     @{ path='/cpu';         c=32;   d='15s' },
-    @{ path='/async-delay'; c=1000; d='15s' }
+    @{ path='/async-delay'; c=1000; d='15s' },
+    @{ path='/db';          c=64;   d='15s' },
+    @{ path='/queries';     c=64;   d='15s'; query='?queries=20' },
+    @{ path='/updates';     c=64;   d='15s'; query='?queries=20' }
 )
 
 foreach ($e in $endpoints) {
     $epName = $e.path.TrimStart('/')
     $outFile = Join-Path $OUT_DIR "$epName.json"
-    Write-Host "  bench $($e.path) c=$($e.c) d=$($e.d)" -ForegroundColor Yellow
-    $raw = & $BOMB -c $e.c -d $e.d -t 5s -l -o json "http://127.0.0.1:$Port$($e.path)"
+    $qs = if ($e.ContainsKey('query')) { $e.query } else { '' }
+    Write-Host "  bench $($e.path)$qs c=$($e.c) d=$($e.d)" -ForegroundColor Yellow
+    $raw = & $BOMB -c $e.c -d $e.d -t 5s -l -o json "http://127.0.0.1:$Port$($e.path)$qs"
     # Extract the JSON line (last non-empty line)
     $jsonLine = ($raw | Where-Object { $_ -match '^\{.*\}$' } | Select-Object -Last 1)
     if (-not $jsonLine) { $jsonLine = ($raw -join "`n") }

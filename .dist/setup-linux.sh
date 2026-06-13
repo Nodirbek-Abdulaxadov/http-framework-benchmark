@@ -122,5 +122,41 @@ if [[ -d _my/jwc-app ]]; then
     fi
 fi
 
+# ---------------------------------------------------------------------------
+# DB tier (/db, /queries, /updates) bootstrap.
+#
+# Env contract for the DB endpoints:
+#   DATABASE_URL  — Postgres connection string. Required when benching /db,
+#                   /queries, /updates. Format: postgres://user:pw@host:5432/db
+#                   (jwc also accepts PG_HOST/PG_PORT/PG_USER/PG_PASSWORD/
+#                   PG_DATABASE; pick one.)
+#
+# Skip this block with JWC_BENCH_SKIP_DB=1 (e.g. CI lanes that only run
+# the stateless tier).
+# ---------------------------------------------------------------------------
+
+if [[ "${JWC_BENCH_SKIP_DB:-0}" != "1" ]]; then
+    if [[ -n "${DATABASE_URL:-}" ]] && command -v psql &>/dev/null; then
+        echo "==> seed bench world table (10,000 rows) via psql"
+        # Idempotent: CREATE TABLE IF NOT EXISTS + ON CONFLICT DO NOTHING.
+        # Re-runs are no-ops once the table is populated.
+        psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+CREATE TABLE IF NOT EXISTS "world" (
+    "id" integer NOT NULL,
+    "randomNumber" integer NOT NULL,
+    PRIMARY KEY ("id")
+);
+INSERT INTO "world" ("id", "randomNumber")
+SELECT g, floor(random() * 10000)::int
+FROM generate_series(1, 10000) g
+ON CONFLICT ("id") DO NOTHING;
+SQL
+    elif [[ -n "${DATABASE_URL:-}" ]]; then
+        echo "WARN: psql not installed — install postgresql-client or run \`jwc migrate up\` in _my/jwc-app to seed the world table." >&2
+    else
+        echo "NOTE: DATABASE_URL not set — skipping world-table seed. /db /queries /updates will 500 until DATABASE_URL is exported and \`jwc migrate up\` is run in _my/jwc-app (or this script is re-run with DATABASE_URL set)." >&2
+    fi
+fi
+
 echo
 echo "Setup complete. Run: bash .dist/bench-all.sh"

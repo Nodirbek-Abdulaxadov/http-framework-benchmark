@@ -1,4 +1,4 @@
-// jwc-app benchmark — updated for JWC v0.4.0.
+// jwc-app benchmark — updated for JWC v0.4.6.
 //
 // v0.4.0 closed the two gaps that previously forced workarounds:
 //   * /json-large now builds the 1000-object array per request with array
@@ -6,6 +6,19 @@
 //     old precompute-once-and-cache string-concat trick.
 //   * /cpu now runs real SHA-256 like every other stack, instead of the LCG
 //     arithmetic substitute.
+//
+// v0.4.6 (Phase 7) adds the TechEmpower-shape DB tier — `/db`, `/queries`,
+// `/updates` — against a single-table `World(id, randomNumber)` schema
+// seeded with 10,000 rows. These exercise the v0.4.4 V::RawJson fast path
+// for `select first` and the v0.4.5 atomic `update CTX.Table set ...`
+// codegen, so they're real cross-stack comparables, not micro-benchmarks.
+
+dbcontext BenchDb : Postgres;
+
+entity World of BenchDb {
+    id          int pk;
+    randomNumber int;
+}
 
 route GET "/ping" {
     return "pong";
@@ -48,6 +61,67 @@ route GET "/async-delay" {
     return "ok";
 }
 
+// -------------------- DB tier (v0.4.6) --------------------
+//
+// Workloads modeled on the TechEmpower /db, /queries, /updates shapes. The
+// World table is seeded with 10,000 rows by `migrations/<ts>_init-bench.up.sql`;
+// IDs are derived from unix_timestamp() so consecutive requests don't all
+// hit the same prepared-statement cache row.
+
+route GET "/db" {
+    let id = unix_timestamp() % 10000 + 1;
+    let row = select World from BenchDb.World where World.id == @id first;
+    return json(row);
+}
+
+route GET "/queries" {
+    let raw = query_param("queries", "20");
+    let n = int(raw);
+    let n2 = n;
+    if (n2 < 1) {
+        n2 = 1;
+    }
+    if (n2 > 500) {
+        n2 = 500;
+    }
+    let out = [];
+    let i = 0;
+    while (i < n2) {
+        let id = (unix_timestamp() + i) % 10000 + 1;
+        let r = select World from BenchDb.World where World.id == @id first;
+        push(out, r);
+        i = i + 1;
+    }
+    return json(out);
+}
+
+route GET "/updates" {
+    let raw = query_param("queries", "20");
+    let n = int(raw);
+    let n2 = n;
+    if (n2 < 1) {
+        n2 = 1;
+    }
+    if (n2 > 500) {
+        n2 = 500;
+    }
+    let out = [];
+    let i = 0;
+    while (i < n2) {
+        let id = (unix_timestamp() + i) % 10000 + 1;
+        let new_val = unix_timestamp() % 10000;
+        update BenchDb.World set randomNumber = new_val where World.id == @id;
+        let r = select World from BenchDb.World where World.id == @id first;
+        push(out, r);
+        i = i + 1;
+    }
+    return json(out);
+}
+
 function main() {
+    // No-arg form: pulls DATABASE_URL (or PG_HOST/PORT/USER/PASSWORD/DATABASE)
+    // from the env. `.env` is auto-loaded before main() runs. The DB tier
+    // (/db, /queries, /updates) requires this to be wired before serve().
+    setConnectionString();
     serve(8080);
 }

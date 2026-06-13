@@ -77,20 +77,30 @@ echo "$NAME started (took $((i / 2))s)"
 "$BOMB" -c 50 -d 3s -q "http://127.0.0.1:${PORT}/ping" > /dev/null
 
 # Endpoints — schedule identical to bench.ps1.
+# DB tier (/db, /queries, /updates) only meaningful when DATABASE_URL is wired
+# and the world table is seeded — see .dist/setup-linux.sh.
 endpoints=(
     "ping        500 15s"
     "json-small  500 15s"
     "json-large  200 15s"
     "cpu         32  15s"
     "async-delay 1000 15s"
+    "db          64  15s"
+    "queries     64  15s"
+    "updates     64  15s"
 )
 
 for line in "${endpoints[@]}"; do
     # Trim leading whitespace, split on space.
     read -r ep c d <<< "$(echo "$line" | tr -s ' ')"
     out_file="$OUT_DIR/$ep.json"
+    # /queries and /updates take a ?queries=20 query string (TechEmpower-shape).
+    case "$ep" in
+        queries|updates) url="http://127.0.0.1:${PORT}/${ep}?queries=20" ;;
+        *)               url="http://127.0.0.1:${PORT}/${ep}" ;;
+    esac
     echo "  bench /$ep c=$c d=$d"
-    raw=$("$BOMB" -c "$c" -d "$d" -t 5s -l -o json "http://127.0.0.1:${PORT}/${ep}")
+    raw=$("$BOMB" -c "$c" -d "$d" -t 5s -l -o json "$url")
     # bombardier's --print-json prints the result envelope on the last line.
     # Extract the last `{ ... }` line just like the PowerShell version did.
     echo "$raw" | awk '/^\{.*\}$/{ last=$0 } END{ if (last) print last; else exit 1 }' \
