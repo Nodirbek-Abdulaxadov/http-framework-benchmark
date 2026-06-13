@@ -3,7 +3,7 @@
 > Stress test of 8 minimal HTTP servers under heavy concurrent load using [bombardier](https://github.com/codesenberg/bombardier).
 > Each framework runs **isolated, sequentially** — no two servers compete for CPU at the same time. All stacks are measured back-to-back in one session on the same machine.
 
-> **Update (jwc-app post-v0.4.4 Sprint 1, 2026-06-13):** JWC closed out Sprint 1 of the production-readiness Phase 1 [1.0-blocker] — interpreter `Value::Record` + AOT `V::Record` codegen with shape-deduped `Arc<Vec<JwcStr>>` field-name layouts (1000-row object-literal arrays share ONE allocation for the schema), DB `select` rows materialise to the typed shape eagerly, and the value model lives in a sibling `jwc-runtime` crate. **Net deltas on the v0.4.4 + Sprint-1 binary vs the v0.4.4 release tag:** `/json-large` 14,643 → 15,378 (+5.0%, the targeted V::Record win on the object-literal-heavy path), `/async-delay` 31,108 → 33,014 (+6.1%, reduced per-request alloc pressure), `/ping` 129,227 → 129,382 (noise), `/json-small` 125,918 → 128,017 (+1.7%), `/cpu` 127 → 120 (noise on the SHA-256 bound path). All JWC tables/charts/bars below have been refreshed against the Sprint-1 binary on the same machine (bombardier 15s @ warmup 3s); the other stacks remain on the v0.4.0 cross-stack snapshot. As before, surfaced `dial tcp: actively refused` errors on high-connection endpoints are Windows ephemeral-port-exhaustion in bombardier, not server-side failures (server logs clean).
+> **Update ([jwc-app v0.4.5](https://github.com/Nodirbek-Abdulaxadov/jwc-lang/releases/tag/v0.4.5), 2026-06-13):** JWC shipped v0.4.5 — the Phase 1 [1.0-blocker] unified value model. The interpreter (`Value::Record`) and AOT (`V::Record`) both flow object-shaped values through a single typed-shape carrier with shape-deduped `Arc<Vec<JwcStr>>` field-name layouts (1000-row object-literal arrays share ONE allocation for the schema), DB `select` rows materialise to the typed shape eagerly, and the value model now lives in a sibling `jwc-runtime` crate so a future interpreter ⇄ AOT unification has somewhere to land. **Net deltas on the v0.4.5 binary vs the v0.4.4 release tag:** `/json-large` 14,643 → 15,378 (+5.0%, the targeted V::Record win on the object-literal-heavy path), `/async-delay` 31,108 → 33,014 (+6.1%, reduced per-request alloc pressure), `/ping` 129,227 → 129,382 (noise), `/json-small` 125,918 → 128,017 (+1.7%), `/cpu` 127 → 120 (noise on the SHA-256 bound path). All JWC tables/charts/bars below have been refreshed against the v0.4.5 binary on the same machine (bombardier 15s @ warmup 3s); the other stacks remain on the v0.4.0 cross-stack snapshot. As before, surfaced `dial tcp: actively refused` errors on high-connection endpoints are Windows ephemeral-port-exhaustion in bombardier, not server-side failures (server logs clean).
 
 ---
 
@@ -28,7 +28,7 @@
 | **node-fastify** | Node 22.12.0, Fastify ^5.8.5 | `node` (V8 JIT) |
 | **python-fastapi** | Python 3.12.4, FastAPI 0.115.14, uvicorn 0.35.0 | `uvicorn --workers 1` |
 | **rust-axum** | Rust 1.92.0, axum 0.8 | `cargo build --release` |
-| **jwc-app** ⭐ | JWC v0.4.4 + Sprint 1 (native AOT → tokio/axum) | `jwc build --native --release` |
+| **jwc-app** ⭐ | JWC v0.4.5 (native AOT → tokio/axum) | `jwc build --native --release` |
 | **liteapi-rust** ⭐ | .NET 10.0 + LiteAPI.Core 2.3.0 (Rust TCP listener — `RunWithRust()`) | `dotnet publish -c Release` |
 | **liteapi-managed** ⭐ | .NET 10.0 + LiteAPI.Core 2.3.0 (managed `Run()`) | `dotnet publish -c Release` |
 
@@ -91,7 +91,7 @@ python-fastapi   █▏                                         6,266
 | **dotnet-minimal** | 211,289 | 1,389,938 | <1.0 | 7.02 | 15.63 | 3,178,617 | 0 |
 | ⭐ **liteapi-rust** | 173,218 | 249,920 | <1.0 | 5.52 | 15.63 | 2,602,777 | 1,452 |
 | **rust-axum** | 143,576 | 162,346 | 3.28 | 5.21 | 7.25 | 2,153,157 | 0 |
-| ⭐ **jwc-app** (native, v0.4.4 + Sprint 1) | 129,382 | — | 3.71 | — | 7.79 | — | 662† |
+| ⭐ **jwc-app** (native, v0.4.5) | 129,382 | — | 3.71 | — | 7.79 | — | 662† |
 | ⭐ **liteapi-managed** | 45,930 | 92,616 | 10.29 | 19.17 | 44.60 | 679,270 | 0 |
 | **node-fastify** | 23,979 | 32,556 | 20.91 | 21.53 | 22.48 | 359,843 | 0 |
 | **python-fastapi** | 6,266 | 11,476 | 79.56 | 82.30 | 96.09 | 92,065 | 26 |
@@ -118,7 +118,7 @@ python-fastapi   █                                          5,644
 | **dotnet-minimal** | 192,506 | 657,131 | <1.0 | 7.54 | 15.63 | 2,920,190 | 0 |
 | ⭐ **liteapi-rust** | 165,965 | 222,063 | <1.0 | 5.51 | 15.63 | 2,490,629 | 1,340 |
 | **rust-axum** | 141,247 | 183,900 | 3.33 | 5.32 | 7.34 | 2,117,614 | 0 |
-| ⭐ **jwc-app** (native, v0.4.4 + Sprint 1) | 128,017 | — | 3.73 | — | 7.96 | — | 748† |
+| ⭐ **jwc-app** (native, v0.4.5) | 128,017 | — | 3.73 | — | 7.96 | — | 748† |
 | ⭐ **liteapi-managed** | 45,453 | 211,966 | 10.46 | 19.90 | 42.00 | 668,834 | 0 |
 | **node-fastify** | 22,611 | 27,197 | 22.22 | 22.88 | 23.70 | 339,442 | 0 |
 | **python-fastapi** | 5,644 | 15,945 | 89.46 | 91.09 | 102.41 | 82,571 | 27 |
@@ -145,7 +145,7 @@ python-fastapi   ▎                                           167
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | **dotnet-minimal** | **23,129** | 43,752 | 8.64 | 15.69 | 23.13 | 14.57 GB | 347,962 | 0 |
 | **rust-axum** | 22,384 | 32,191 | 8.83 | 13.52 | 18.44 | 13.98 GB | 334,678 | 0 |
-| ⭐ **jwc-app** (native, v0.4.4 + Sprint 1) | 15,378 | — | 13.06 | — | 25.89 | — | — | 0 |
+| ⭐ **jwc-app** (native, v0.4.5) | 15,378 | — | 13.06 | — | 25.89 | — | — | 0 |
 | **go-fiber** | 14,516 | 29,619 | 4.46 | 51.23 | 101.84 | 9.03 GB | 216,010 | 0 |
 | ⭐ **liteapi-managed** | 12,934 | 17,256 | 12.34 | 32.42 | 56.50 | 8.12 GB | 193,872 | 0 |
 | ⭐ **liteapi-rust** | 8,248 | 13,861 | 7.74 | 27.47 | 253.85 | 5.17 GB | 123,736 | 0 |
@@ -214,7 +214,7 @@ python-fastapi   ███                                       5,265
 | **go-fiber** | **75,427** | 11.18 | 18.06 | 28.12 | 1,574 | 1,124,568 | 0 |
 | **rust-axum** | 43,979 | 19.82 | 33.48 | 44.15 | 1,192 | 663,128 | 0 |
 | **dotnet-minimal** | 38,147 | 23.96 | 39.75 | 48.08 | 1,552 | 564,258 | 0 |
-| ⭐ **jwc-app** (native, v0.4.4 + Sprint 1) | 33,014 | 16.20 | — | 58.92 | — | — | 170,241† |
+| ⭐ **jwc-app** (native, v0.4.5) | 33,014 | 16.20 | — | 58.92 | — | — | 170,241† |
 | **node-fastify** | 24,060 | 34.95 | 35.97 | 37.54 | 2,315 | 360,766 | 697 |
 | ⭐ **liteapi-managed** | 14,209 | 65.18 | 93.14 | 111.44 | 30 | 208,441 | 0 |
 | ⭐ **liteapi-rust** | 13,820 | 17.42 | 30.51 | 2087.59 | 7,608 | 198,949 | 5,379 |
@@ -248,7 +248,7 @@ python-fastapi   █                                         17,354
 | **dotnet-minimal** | 465,200 | 7,012,709 | 15.60 GB | 0 |
 | ⭐ **liteapi-rust** | 361,366 | 5,425,937 | 5.96 GB | 8,171 |
 | **rust-axum** | 351,376 | 5,271,272 | 14.63 GB | 0 |
-| ⭐ **jwc-app** (native, v0.4.4 + Sprint 1) | 305,911 | — | — | 0 (server) / 171,651† (client dial) |
+| ⭐ **jwc-app** (native, v0.4.5) | 305,911 | — | — | 0 (server) / 171,651† (client dial) |
 | ⭐ **liteapi-managed** | 118,638 | 1,752,058 | 8.45 GB | 0 |
 | **node-fastify** | 74,403 | 1,117,258 | 2.55 GB | 725 |
 | **python-fastapi** | 17,354 | 258,055 | 130 MB | 1,998 |
@@ -262,7 +262,7 @@ python-fastapi   █                                         17,354
 | **rust-axum** | 7.25 | 7.34 | **18.44** | 294.98 | 44.15 |
 | **go-fiber** | 9.56 | 10.69 | 101.84 | 422.25 | 28.12 |
 | **dotnet-minimal** | 15.63 | 15.63 | 23.13 | 410.44 | 48.08 |
-| ⭐ **jwc-app** (v0.4.4 + Sprint 1) | 7.79 | 7.96 | 25.89 | 433.93 | 58.92 |
+| ⭐ **jwc-app** (v0.4.5) | 7.79 | 7.96 | 25.89 | 433.93 | 58.92 |
 | ⭐ **liteapi-managed** | 44.60 | 42.00 | 56.50 | 963.71 | 111.44 |
 | ⭐ **liteapi-rust** | 15.63 | 15.63 | 253.85 | 1,090.87 | 2,087.59 |
 | **node-fastify** | 22.48 | 23.70 | 62.29 | 25,049.74 | 37.54 |
