@@ -2,7 +2,10 @@ param(
     [Parameter(Mandatory=$true)][string]$Name,
     [Parameter(Mandatory=$true)][string]$StartCmd,
     [Parameter(Mandatory=$true)][string]$WorkDir,
-    [int]$Port = 8080
+    [int]$Port = 8080,
+    # jwc's native binary binds [::] and Windows defaults IPV6_V6ONLY to on, so
+    # it is only reachable over IPv6. Everything else listens on 0.0.0.0.
+    [string]$BindHost = '127.0.0.1'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,14 +25,23 @@ function Stop-OnPort([int]$Port) {
 Write-Host "=== $Name ===" -ForegroundColor Cyan
 Stop-OnPort $Port
 
+# Reset the world table so every server meets the same physical layout and no
+# autovacuum fires mid-measurement — see .dist/reset-db.js.
+$reset = Join-Path $PSScriptRoot 'reset-db.js'
+if (Test-Path $reset) {
+    $out = & node $reset
+    if ($LASTEXITCODE -eq 0) { Write-Host "  $out" -ForegroundColor DarkGray }
+    else { Write-Host "  DB reset skipped (exit $LASTEXITCODE)" -ForegroundColor Yellow }
+}
+
 # Launch server
-$proc = Start-Process -FilePath "powershell" -ArgumentList "-NoProfile","-Command",$StartCmd -WorkingDirectory $WorkDir -WindowStyle Hidden -PassThru
+Start-Process -FilePath "powershell" -ArgumentList "-NoProfile","-Command",$StartCmd -WorkingDirectory $WorkDir -WindowStyle Hidden | Out-Null
 
 # Wait for /ping ready (max 60s)
 $ready = $false
 for ($i=0; $i -lt 120; $i++) {
     try {
-        $r = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/ping" -UseBasicParsing -TimeoutSec 1 -ErrorAction Stop
+        $r = Invoke-WebRequest -Uri "http://$($BindHost):$Port/ping" -UseBasicParsing -TimeoutSec 1 -ErrorAction Stop
         if ($r.StatusCode -eq 200) { $ready = $true; break }
     } catch { Start-Sleep -Milliseconds 500 }
 }
@@ -41,10 +53,10 @@ if (-not $ready) {
 Write-Host "$Name started (took $($i*0.5)s)" -ForegroundColor Green
 
 # Warm-up
-& $BOMB -c 50 -d 3s -q "http://127.0.0.1:$Port/ping" | Out-Null
+& $BOMB -c 50 -d 3s -q "http://$($BindHost):$Port/ping" | Out-Null
 
-# DB tier (/db, /queries, /updates) only meaningful when DATABASE_URL is wired
-# and the world table is seeded — see .dist/setup-linux.sh.
+# DB tier (/db, /queries, /updates) is implemented by every stack now, but it
+# only runs against a seeded world table — see .dist/setup-linux.sh.
 $endpoints = @(
     @{ path='/ping';        c=500;  d='15s' },
     @{ path='/json-small';  c=500;  d='15s' },
@@ -61,7 +73,7 @@ foreach ($e in $endpoints) {
     $outFile = Join-Path $OUT_DIR "$epName.json"
     $qs = if ($e.ContainsKey('query')) { $e.query } else { '' }
     Write-Host "  bench $($e.path)$qs c=$($e.c) d=$($e.d)" -ForegroundColor Yellow
-    $raw = & $BOMB -c $e.c -d $e.d -t 5s -l -o json "http://127.0.0.1:$Port$($e.path)$qs"
+    $raw = & $BOMB -c $e.c -d $e.d -t 5s -l -o json "http://$($BindHost):$Port$($e.path)$qs"
     # Extract the JSON line (last non-empty line)
     $jsonLine = ($raw | Where-Object { $_ -match '^\{.*\}$' } | Select-Object -Last 1)
     if (-not $jsonLine) { $jsonLine = ($raw -join "`n") }

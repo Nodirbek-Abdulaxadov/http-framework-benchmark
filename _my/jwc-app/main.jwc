@@ -1,4 +1,4 @@
-// jwc-app benchmark — updated for JWC v0.4.6.
+// jwc-app benchmark — updated for JWC v0.8.0.
 //
 // v0.4.0 closed the two gaps that previously forced workarounds:
 //   * /json-large now builds the 1000-object array per request with array
@@ -12,6 +12,12 @@
 // seeded with 10,000 rows. These exercise the v0.4.4 V::RawJson fast path
 // for `select first` and the v0.4.5 atomic `update CTX.Table set ...`
 // codegen, so they're real cross-stack comparables, not micro-benchmarks.
+//
+// v0.8.0 brings compound assignment (`+=`) and the ternary operator, both used
+// below. The rest of the 0.7/0.8 surface doesn't apply here: no FK columns to
+// `index`, no join table to `unique(a, b)`, no frontend to move onto the new
+// `code`/`details` error envelope, and every `where` binds a `@param` rather
+// than a literal, so the pre-0.8 `and`/`or` literal-RHS bug never hit it.
 
 dbcontext BenchDb : Postgres;
 
@@ -39,7 +45,7 @@ route GET "/json-large" {
     let i = 0;
     while (i < 1000) {
         push(items, { id: i, name: "Item " + i, value: i * 10 });
-        i = i + 1;
+        i += 1;
     }
     return json(items);
 }
@@ -51,7 +57,7 @@ route GET "/cpu" {
     let i = 0;
     while (i < 100000) {
         h = sha256(h);
-        i = i + 1;
+        i += 1;
     }
     return h;
 }
@@ -61,15 +67,25 @@ route GET "/async-delay" {
     return "ok";
 }
 
-// -------------------- DB tier (v0.4.6) --------------------
+// -------------------- DB tier --------------------
 //
 // Workloads modeled on the TechEmpower /db, /queries, /updates shapes. The
-// World table is seeded with 10,000 rows by `migrations/<ts>_init-bench.up.sql`;
-// IDs are derived from unix_timestamp() so consecutive requests don't all
-// hit the same prepared-statement cache row.
+// World table is seeded with 10,000 rows by `migrations/<ts>_init-bench.up.sql`.
+//
+// Row IDs come from a per-request seed so consecutive requests don't all hit
+// the same prepared-statement cache row. The seed is `ss * 1000 + mmm` pulled
+// out of now()'s ISO-8601 string ("2026-07-28T06:36:44.521Z" → 44521), which
+// spans 0..59999 and therefore covers the full 1..10000 id range six times
+// over. The other stacks use their native RNG for the same purpose — the
+// per-request DB work is identical, only the id source differs. now() +
+// substring() + int() are all supported by the native backend; the
+// unix_timestamp() this replaced was not, which is what broke
+// `jwc build --native`.
 
 route GET "/db" {
-    let id = unix_timestamp() % 10000 + 1;
+    let t = now();
+    let seed = int(substring(t, 17, 2)) * 1000 + int(substring(t, 20, 3));
+    let id = seed % 10000 + 1;
     let row = select World from BenchDb.World where World.id == @id first;
     return json(row);
 }
@@ -77,43 +93,47 @@ route GET "/db" {
 route GET "/queries" {
     let raw = query_param("queries", "20");
     let n = int(raw);
-    let n2 = n;
-    if (n2 < 1) {
-        n2 = 1;
-    }
-    if (n2 > 500) {
-        n2 = 500;
-    }
+    let n2 = n < 1 ? 1 : (n > 500 ? 500 : n);
+    let t = now();
+    let seed = int(substring(t, 17, 2)) * 1000 + int(substring(t, 20, 3));
     let out = [];
     let i = 0;
     while (i < n2) {
-        let id = (unix_timestamp() + i) % 10000 + 1;
+        let id = (seed * 7919 + i * 104729) % 10000 + 1;
         let r = select World from BenchDb.World where World.id == @id first;
         push(out, r);
-        i = i + 1;
+        i += 1;
     }
     return json(out);
 }
 
+// NOTE: the natural form of this route —
+//
+//     update BenchDb.World set randomNumber = new_val where World.id == @id;
+//
+// does not work in a `jwc build --native` binary as of v0.8.0. The native
+// codegen emits `jwc_param_str` for the SET value (`jwc_param_bigint` when it is
+// a literal), so writing to an `int` (int4) column always fails to serialize.
+// `raw_sql` is the escape hatch: it binds `V::Int` params as int4 correctly. It
+// takes exactly two arguments — the SQL and a JSON array *string* of positional
+// params — so the values have to be formatted into that string by hand. See
+// JWC-0.8.0-NATIVE-BUGS.md for the full write-up.
 route GET "/updates" {
     let raw = query_param("queries", "20");
     let n = int(raw);
-    let n2 = n;
-    if (n2 < 1) {
-        n2 = 1;
-    }
-    if (n2 > 500) {
-        n2 = 500;
-    }
+    let n2 = n < 1 ? 1 : (n > 500 ? 500 : n);
+    let t = now();
+    let seed = int(substring(t, 17, 2)) * 1000 + int(substring(t, 20, 3));
     let out = [];
     let i = 0;
     while (i < n2) {
-        let id = (unix_timestamp() + i) % 10000 + 1;
-        let new_val = unix_timestamp() % 10000;
-        update BenchDb.World set randomNumber = new_val where World.id == @id;
+        let id = (seed * 7919 + i * 104729) % 10000 + 1;
+        let new_val = (seed * 31 + i * 17) % 10000 + 1;
+        raw_sql("UPDATE world SET randomnumber = $1 WHERE id = $2",
+                "[" + new_val + "," + id + "]");
         let r = select World from BenchDb.World where World.id == @id first;
         push(out, r);
-        i = i + 1;
+        i += 1;
     }
     return json(out);
 }

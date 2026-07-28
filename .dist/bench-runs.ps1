@@ -11,7 +11,8 @@ $servers = @(
     @{ Name='node-fastify';     Dir="$ROOT\node-fastify";          Cmd='node "index,js"' },
     @{ Name='python-fastapi';   Dir="$ROOT\python-fastapi";        Cmd='python -m uvicorn main:app --host 0.0.0.0 --port 8080 --workers 1 --log-level warning' },
     @{ Name='rust-axum';        Dir="$ROOT\rust-axum";             Cmd='./target/release/benchmark.exe' },
-    @{ Name='jwc-app';          Dir="$ROOT\_my\jwc-app";           Cmd='./bin/release/jwc-app.exe' },
+    # Native jwc binaries bind [::] with IPV6_V6ONLY — IPv6-only on Windows.
+    @{ Name='jwc-app';          Dir="$ROOT\_my\jwc-app";           Cmd='./bin/release/jwc-app.exe'; BindHost='[::1]' },
     @{ Name='liteapi-managed';  Dir="$ROOT\_my\liteapi";           Cmd='dotnet ./publish/liteapi-managed.dll' },
     @{ Name='liteapi-rust';     Dir="$ROOT\_my\liteapi-rust";      Cmd='dotnet ./publish/liteapi-rust.dll' }
 )
@@ -32,6 +33,7 @@ function Stop-OnPort([int]$Port) {
 
 function Run-Server($s, [int]$Run) {
     $port = 8080
+    $bindHost = if ($s.ContainsKey('BindHost')) { $s.BindHost } else { '127.0.0.1' }
     $outDir = Join-Path $RESULTS "$($s.Name)\run$Run"
     New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
@@ -45,7 +47,7 @@ function Run-Server($s, [int]$Run) {
     $ready = $false
     for ($i=0; $i -lt 120; $i++) {
         try {
-            $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/ping" -UseBasicParsing -TimeoutSec 1 -ErrorAction Stop
+            $r = Invoke-WebRequest -Uri "http://$($bindHost):$port/ping" -UseBasicParsing -TimeoutSec 1 -ErrorAction Stop
             if ($r.StatusCode -eq 200) { $ready = $true; break }
         } catch { Start-Sleep -Milliseconds 500 }
     }
@@ -57,12 +59,12 @@ function Run-Server($s, [int]$Run) {
     Write-Host "[$($s.Name) run $Run] ready (${i}*500ms)" -ForegroundColor Green
 
     # Warm-up
-    & $BOMB -c 50 -d 3s -q "http://127.0.0.1:$port/ping" | Out-Null
+    & $BOMB -c 50 -d 3s -q "http://$($bindHost):$port/ping" | Out-Null
 
     foreach ($e in $endpoints) {
         $epName = $e.path.TrimStart('/')
         $outFile = Join-Path $outDir "$epName.json"
-        $raw = & $BOMB -c $e.c -d $e.d -t 5s -l -o json "http://127.0.0.1:$port$($e.path)"
+        $raw = & $BOMB -c $e.c -d $e.d -t 5s -l -o json "http://$($bindHost):$port$($e.path)"
         $jsonLine = ($raw | Where-Object { $_ -match '^\{.*\}$' } | Select-Object -Last 1)
         if (-not $jsonLine) { $jsonLine = ($raw -join "`n") }
         [System.IO.File]::WriteAllText($outFile, $jsonLine, [System.Text.UTF8Encoding]::new($false))

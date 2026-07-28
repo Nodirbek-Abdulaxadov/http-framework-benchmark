@@ -2,6 +2,31 @@ const fastify = require("fastify")({
     logger: false
 })
 
+const { Pool } = require("pg")
+
+// DB tier (/db, /queries, /updates). Pool capped at 64 to match jwc's
+// JWC_DB_POOL_SIZE default and the bench's 64 concurrent connections.
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL
+        || "postgres://postgres:1234@localhost:5432/BenchJWCDB",
+    max: 64
+})
+
+// Missing or unparsable ?queries= is 1; the value is pinned to 1..500.
+function clampQueries(raw) {
+    const n = parseInt(raw, 10)
+    if (Number.isNaN(n)) return 1
+    return n < 1 ? 1 : n > 500 ? 500 : n
+}
+
+const randomId = () => Math.floor(Math.random() * 10000) + 1
+
+async function fetchWorld(id) {
+    const { rows } = await pool.query(
+        "SELECT id, randomnumber FROM world WHERE id = $1", [id])
+    return { id: rows[0].id, randomNumber: rows[0].randomnumber }
+}
+
 fastify.get("/ping", async () => {
     return "pong"
 })
@@ -40,6 +65,35 @@ fastify.get("/cpu", async () => {
 fastify.get("/async-delay", async () => {
     await new Promise(r => setTimeout(r, 10))
     return "ok"
+})
+
+// -------------------- DB tier --------------------
+
+fastify.get("/db", async () => {
+    return fetchWorld(randomId())
+})
+
+fastify.get("/queries", async (req) => {
+    const n = clampQueries(req.query.queries)
+    const rows = []
+    for (let i = 0; i < n; i++) {
+        rows.push(await fetchWorld(randomId()))
+    }
+    return rows
+})
+
+fastify.get("/updates", async (req) => {
+    const n = clampQueries(req.query.queries)
+    const rows = []
+    for (let i = 0; i < n; i++) {
+        const row = await fetchWorld(randomId())
+        row.randomNumber = randomId()
+        await pool.query(
+            "UPDATE world SET randomnumber = $1 WHERE id = $2",
+            [row.randomNumber, row.id])
+        rows.push(row)
+    }
+    return rows
 })
 
 fastify.listen({

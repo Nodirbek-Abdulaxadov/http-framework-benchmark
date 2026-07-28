@@ -1,13 +1,14 @@
 $ErrorActionPreference = 'Stop'
 $RESULTS = "C:\Users\nbkab\OneDrive\Ishchi stol\bench\.dist\results"
 $servers = 'dotnet-minimal','go-fiber','node-fastify','python-fastapi','rust-axum','jwc-app','liteapi-rust','liteapi-managed'
-$endpoints = 'ping','json-small','json-large','cpu','async-delay'
+$endpoints = 'ping','json-small','json-large','cpu','async-delay','db','queries','updates'
 
 $data = @{}
 foreach ($s in $servers) {
     $data[$s] = @{}
     foreach ($e in $endpoints) {
         $f = Join-Path $RESULTS "$s\$e.json"
+        if (-not (Test-Path $f)) { continue }
         $json = Get-Content -Raw -Encoding UTF8 $f | ConvertFrom-Json
         $r = $json.result
         $total = $r.req1xx + $r.req2xx + $r.req3xx + $r.req4xx + $r.req5xx + $r.others
