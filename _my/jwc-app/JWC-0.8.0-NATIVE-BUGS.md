@@ -1,5 +1,27 @@
 # JWC v0.8.0 — native backend defects
 
+> **All seven are fixed upstream.** Verified against a native `--release`
+> build and a real Postgres: `update … set` writes an `int` column and the
+> row changes on disk; a wrong-arity `raw_sql` and `serve("0.0.0.0", 8081)`
+> are both rejected by `jwc check` with `error[E022]`; the emitted SQL keeps
+> the declared column casing; a failing query answers the unified 500
+> envelope instead of dropping the connection; `unix_timestamp` and a new
+> `random_int` reach the native backend. The dual-stack bind (defect 6) is
+> fixed by clearing `IPV6_V6ONLY`, plus a `JWC_BIND_HOST` override — that one
+> could not be verified here, since the machine used has no IPv6 stack at all;
+> it needs a check on Windows.
+>
+> Two more surfaced while fixing these. `setConnectionString(url)` failed to
+> compile in a native build — the prelude took no arguments — and
+> `not_found`, `unauthorized` and `forbidden` discarded a message the native
+> prelude honoured. A third, found by the same work and worse than anything
+> below: `where <int column> == @id` never worked in the **interpreter**,
+> because `path_param()` returns a string and the bind type came from the
+> value's shape rather than the column's — so `GET /users/{id}` answered 500
+> on every request unless the key was text.
+>
+> Kept as written for the record; nothing below has been edited.
+
 Found while porting `_my/jwc-app` (the HTTP benchmark app) to v0.8.0 and adding
 a TechEmpower-shaped DB tier. Every item below is reproduced against a real
 Postgres and confirmed by reading the Rust the compiler emitted into

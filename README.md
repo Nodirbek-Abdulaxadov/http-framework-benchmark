@@ -8,6 +8,8 @@
 > 1. **The DB tier is now cross-stack.** `/db`, `/queries` and `/updates` were previously implemented only by `jwc-app`, so the other seven stacks answered 404 and the numbers meant nothing. All eight now run the same TechEmpower-shaped workload against the same `world(id, randomnumber)` table in the same Postgres instance, each with its pool capped at 64.
 > 2. **`jwc-app` moved to JWC v0.8.0.** `jwc build --native --release` works again. Its `/updates` route goes through `raw_sql` rather than `update … set`, because the native backend cannot bind a value into an `int` column — see [JWC-0.8.0-NATIVE-BUGS.md](_my/jwc-app/JWC-0.8.0-NATIVE-BUGS.md).
 >
+> **The numbers below predate the JWC fixes.** Every defect in that write-up is now fixed upstream, and `_my/jwc-app/main.jwc` has been moved off the workarounds: `/updates` uses `update … set` like every other stack, and `/db` / `/queries` draw ids from `random_int()` rather than slicing digits out of `now()`. The measured table still describes the workaround build, so it needs a re-run on this machine before it describes the current source. An A/B of both `/updates` shapes in one process put them within run-to-run noise, so the ranking is not expected to move — but that is a different machine's measurement, not this one's.
+>
 > Rankings are stated in **2xx/s** — successful responses per second — not bombardier's `rps`. On this Windows box the 500- and 1000-connection endpoints generate large numbers of client-side `dial tcp: connectex: actively refused` failures from ephemeral-port exhaustion, and bombardier counts those attempts in `rps`. The two figures agree closely at 64 connections and diverge sharply at 1000, where `node-fastify` reports 16,606 rps against **80** successful responses.
 
 ---
@@ -29,6 +31,10 @@
 defaults `IPV6_V6ONLY` to on, making `127.0.0.1` unreachable. Loopback IPv6 and
 IPv4 perform equivalently here; `.dist/bench.ps1` takes a `-BindHost` parameter
 for exactly this case.
+
+Fixed upstream: the listener now clears `IPV6_V6ONLY`, so `[::]` accepts IPv4 on
+Windows too, and `JWC_BIND_HOST` overrides the bind address outright. The
+`-BindHost` parameter is no longer needed for `jwc-app` once it is rebuilt.
 
 ### Framework Versions & Build Flags
 
@@ -70,10 +76,12 @@ Every stack runs the identical workload — no stack gets a shortcut:
 | `/updates` | Same read, then `UPDATE world SET randomnumber = $1 WHERE id = $2` per row. |
 | `?queries=` | Missing or unparsable → 1; the value is clamped to 1..500. |
 
-Seven stacks draw ids from their language's RNG. `jwc-app` derives them
+Seven stacks draw ids from their language's RNG. `jwc-app` derived them
 arithmetically from `now()` (`ss * 1000 + mmm`, scrambled per iteration)
-because JWC's native backend has no RNG builtin — the per-request database
-work is identical, only the id source differs.
+because JWC's native backend had no RNG builtin — the per-request database
+work was identical, only the id source differed. JWC now has `random_int()`
+in both backends and `_my/jwc-app/main.jwc` uses it, so all eight stacks draw
+ids the same way; the caveat applies only to the measured table above.
 
 **The `world` table is reset before every server** (`TRUNCATE` + reseed +
 `VACUUM FULL`, autovacuum disabled on the table — see [`.dist/reset-db.js`](.dist/reset-db.js)).
@@ -109,21 +117,37 @@ Ranked by successful responses per second:
 
 ### Note on `jwc-app`'s `/updates` implementation
 
-Every other stack writes with its driver's ordinary parameterised update.
-`jwc-app` cannot: JWC v0.8.0's native codegen binds the SET value as text
-(`jwc_param_str`), or as `int8` when it is a literal, so an `int4` column is
-unwritable and the request panics its worker thread. The working form is
-`raw_sql`, which types parameters from the runtime value:
+**Resolved.** `_my/jwc-app/main.jwc` now writes with the language's own
+`update … set`, the same shape every other stack uses:
+
+```jwc
+update BenchDb.World set randomNumber = new_val where World.id == @id;
+```
+
+The measured table above was produced before that, when the route had to go
+through `raw_sql` with its positional parameters hand-formatted into a JSON
+string:
 
 ```jwc
 raw_sql("UPDATE world SET randomnumber = $1 WHERE id = $2",
         "[" + new_val + "," + id + "]");
 ```
 
-The workload is therefore equivalent — one `UPDATE` per row, same table, same
-parameters — but `jwc-app` additionally builds a short JSON string per row,
-which the others do not. At ~32 ms per request that overhead is not material,
-but it is a real difference and worth stating.
+JWC v0.8.0's native codegen bound the SET value as text (`jwc_param_str`), or
+as `int8` when it was a literal, so an `int4` column was unwritable and the
+request panicked its worker thread. The codegen now takes the bind type from
+the entity field, which is what the WHERE clause in the same statement always
+did.
+
+Both shapes were measured in one process on one machine, alternating, two
+passes of 20 s at 64 connections: `raw_sql` 661 and 626 rps, `update … set`
+625 and 631. The extra JSON string per row was never material and removing it
+is not a speed-up — the point is that the workaround is gone.
+
+The `world` table also no longer needs its `randomnumber` column folded to
+lower case: `gen-sql`, the interpreter and the native backend now agree on the
+declared casing, so `migrations/` creates `"randomNumber"` as the entity
+declares it.
 
 An earlier revision of this benchmark reported 0 successful responses for this
 endpoint. That was a mistake on my side: `raw_sql` had been called with the
