@@ -18,8 +18,13 @@ run() {
     local name="$1"
     local cmd="$2"
     local dir="$3"
+    local port="${4:-8080}"
     echo
-    "$SCRIPT_DIR/bench.sh" "$name" "$cmd" "$dir" || {
+    node "$SCRIPT_DIR/reset-db.js" || {
+        echo "WARN: database reset failed before $name" >&2
+        return 1
+    }
+    bash "$SCRIPT_DIR/bench.sh" "$name" "$cmd" "$dir" "$port" || {
         echo "WARN: $name failed, continuing" >&2
     }
 }
@@ -39,8 +44,8 @@ if [[ -x "$REPO_ROOT/go-fiber/go-fiber" ]] || [[ -x "$REPO_ROOT/go-fiber/go-fibe
 fi
 
 # --- node-fastify ---
-if [[ -f "$REPO_ROOT/node-fastify/index.js" ]]; then
-    run "node-fastify" "node index.js" "$REPO_ROOT/node-fastify"
+if [[ -f "$REPO_ROOT/node-fastify/index,js" ]]; then
+    run "node-fastify" "node 'index,js'" "$REPO_ROOT/node-fastify"
 fi
 
 # --- python-fastapi ---
@@ -57,16 +62,16 @@ fi
 
 # --- jwc-app (native AOT) ---
 if [[ -x "$REPO_ROOT/_my/jwc-app/bin/release/jwc-app" ]]; then
-    run "jwc" "./bin/release/jwc-app" "$REPO_ROOT/_my/jwc-app"
+    run "jwc-app" "./bin/release/jwc-app" "$REPO_ROOT/_my/jwc-app"
 elif [[ -x "$REPO_ROOT/_my/jwc-app/bin/release/jwc-app.exe" ]]; then
-    run "jwc" "./bin/release/jwc-app.exe" "$REPO_ROOT/_my/jwc-app"
+    run "jwc-app" "./bin/release/jwc-app.exe" "$REPO_ROOT/_my/jwc-app"
 fi
 
 # --- liteapi (managed + rust) ---
-if [[ -d "$REPO_ROOT/_my/liteapi-managed/publish" ]]; then
+if [[ -d "$REPO_ROOT/_my/liteapi/publish" ]]; then
     run "liteapi-managed" \
         "dotnet ./publish/liteapi-managed.dll --urls http://0.0.0.0:8080" \
-        "$REPO_ROOT/_my/liteapi-managed"
+        "$REPO_ROOT/_my/liteapi" 6070
 fi
 if [[ -d "$REPO_ROOT/_my/liteapi-rust/publish" ]]; then
     run "liteapi-rust" \

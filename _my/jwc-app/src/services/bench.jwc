@@ -1,0 +1,118 @@
+namespace services.bench;
+
+import app;
+import db.world;
+
+/// `sleep_ms` is a plain-function built-in (E0230 inside a route), so the
+/// 10 ms async wait lives here and the route calls it.
+function nap() {
+    sleep_ms(10);
+}
+
+service Bench {
+    /// /json-large: build 1000 objects per request and serialize them — the
+    /// same loop + serialize workload as the other stacks.
+    ///
+    /// Arrays are immutable in rc.4: `array.push` answers a new array (the
+    /// native lowering clones the Vec every call), so this loop is O(n²) —
+    /// ~500k element copies per request, ~11 ms single-request on the native
+    /// binary. There is no in-place push, range or map to build it any other
+    /// way, so this is the language's cost on this workload, not a
+    /// workaround.
+    function large() {
+        let items = [];
+        let i = 0;
+        while (i < 1000) {
+            items = array.push(
+                items,
+                { id: i, name: "Item " + string.of(i), value: i * 10 }
+            );
+            i = i + 1;
+        }
+        return @items;
+    }
+
+    /// /cpu: 100,000 chained SHA-256 hashes, matching the other stacks.
+    function cpu() {
+        let h = "seed";
+        let i = 0;
+        while (i < 100000) {
+            h = hash.sha256(h);
+            i = i + 1;
+        }
+        return @h;
+    }
+
+    /// Per-request seed so consecutive requests don't all hit the same row.
+    /// JWC has no RNG built-in, so it is `ss * 1000 + mmm` cut out of
+    /// `date.now()`'s RFC 3339 string ("2026-09-15T11:35:05.857281Z" →
+    /// 5857), which spans 0..59999 and covers the 1..10000 id range six
+    /// times over. The other stacks use their native RNG for the same
+    /// purpose — the per-request DB work is identical, only the id source
+    /// differs.
+    function seed() {
+        let t = string.of(date.now());
+        return int(string.slice(t, 17, 2)) * 1000 + int(string.slice(t, 20, 3));
+    }
+
+    /// TechEmpower clamps `?queries=` to 1..500; a missing or non-numeric
+    /// value is 1, as in the other stacks. `int()` on bad input raises
+    /// BadRequest (a 400) rather than answering 0, so the postfix `catch`
+    /// is what keeps a garbage value a 1 instead of a 400.
+    function clamp(raw: text?) {
+        if (@raw == null) {
+            return 1;
+        }
+        let n = int(@raw) catch BadRequest (err) {
+            return 1;
+        };
+        return n < 1 ? 1 : n > 500 ? 500 : n;
+    }
+
+    /// One row by primary key. No projection, so the answer is Raw — the
+    /// JSON Postgres built goes straight out without being parsed.
+    function one(id: int) {
+        return select W from BenchDb.public.World
+            where W.id == @id
+            first or throw NotFound("no such world row");
+    }
+
+    /// /db
+    function db() {
+        return Bench.one(Bench.seed() % 10000 + 1);
+    }
+
+    /// /queries?queries=N
+    function queries(n: int) {
+        let seed = Bench.seed();
+        let out = [];
+        let i = 0;
+        while (i < @n) {
+            let id = (seed * 7919 + i * 104729) % 10000 + 1;
+            out = array.push(out, Bench.one(id));
+            i = i + 1;
+        }
+        return @out;
+    }
+
+    /// /updates?queries=N — read the row, write a new randomNumber, return
+    /// the row. `update … set` on an `int` column works in rc.4 on both
+    /// backends, so the 0.8 `raw_sql` workaround is gone.
+    function updates(n: int) {
+        let seed = Bench.seed();
+        let out = [];
+        let i = 0;
+        while (i < @n) {
+            let id = (seed * 7919 + i * 104729) % 10000 + 1;
+            let new_val = (seed * 31 + i * 17) % 10000 + 1;
+            let row = update W of BenchDb.public.World
+                set randomNumber = @new_val
+                where W.id == @id
+                as { W.id, W.randomNumber }
+                first or throw NotFound("no such world row");
+            out = array.push(out, @row);
+            i = i + 1;
+        }
+        return @out;
+    }
+}

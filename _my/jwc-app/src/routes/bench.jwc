@@ -1,0 +1,39 @@
+namespace routes.bench;
+
+import services.bench;
+
+routes "" {
+    route GET "/ping" {
+        return text("pong");
+    }
+
+    route GET "/json-small" {
+        return json({ id: 1, name: "Test", active: true });
+    }
+
+    route GET "/json-large" {
+        return json(Bench.large());
+    }
+
+    route GET "/cpu" {
+        return text(Bench.cpu());
+    }
+
+    route GET "/async-delay" {
+        nap();
+        return text("ok");
+    }
+
+    // -------------------- DB tier (TechEmpower /db, /queries, /updates) --------------------
+    route GET "/db" {
+        return json(Bench.db());
+    }
+
+    route GET "/queries" {
+        return json(Bench.queries(Bench.clamp(request.query("queries"))));
+    }
+
+    route GET "/updates" {
+        return json(Bench.updates(Bench.clamp(request.query("queries"))));
+    }
+}

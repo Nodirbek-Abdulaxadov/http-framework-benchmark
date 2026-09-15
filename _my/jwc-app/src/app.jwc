@@ -1,0 +1,33 @@
+namespace app;
+
+// jwc-app benchmark — JWC 1.0.0-rc.4.
+//
+// rc.4 is a different language from the 0.x line this app was first written
+// in: one namespace per file under src/, `database`/`schema`/`table` instead of
+// `dbcontext`/`entity`, every route inside a `routes` block, queries in a
+// `service`, namespaced built-ins (`hash.sha256`, `string.slice`, `date.now`,
+// `request.query`), `raw()` with `{}` placeholders instead of `raw_sql`, and
+// `serve()` reading PORT/DATABASE_URL from the environment. The workloads are
+// unchanged — see services/bench.jwc for each one.
+/// Pool capped at 64 to match the bench's 64 concurrent connections and the
+/// other stacks' pools.
+database BenchDb : Postgres {
+    init() {
+        pool_size         = 64;
+        statement_timeout = "10s";
+        connect_timeout   = "5s";
+    }
+}
+
+/// The World table lives in `public`, where the other seven stacks expect it.
+schema public of BenchDb;
+
+server {
+    port            = 8080;
+    max_body_bytes  = 262144;
+    request_timeout = "30s";
+}
+
+function main() {
+    serve();
+}
