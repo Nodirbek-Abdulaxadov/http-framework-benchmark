@@ -1,8 +1,8 @@
 namespace app;
 
-// jwc-app benchmark — JWC 1.0.0-rc.4.
+// jwc-app benchmark — JWC 1.0.0-rc.5.
 //
-// rc.4 is a different language from the 0.x line this app was first written
+// rc.4+ is a different language from the 0.x line this app was first written
 // in: one namespace per file under src/, `database`/`schema`/`table` instead of
 // `dbcontext`/`entity`, every route inside a `routes` block, queries in a
 // `service`, namespaced built-ins (`hash.sha256`, `string.slice`, `date.now`,

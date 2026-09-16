@@ -13,12 +13,9 @@ service Bench {
     /// /json-large: build 1000 objects per request and serialize them — the
     /// same loop + serialize workload as the other stacks.
     ///
-    /// Arrays are immutable in rc.4: `array.push` answers a new array (the
-    /// native lowering clones the Vec every call), so this loop is O(n²) —
-    /// ~500k element copies per request, ~11 ms single-request on the native
-    /// binary. There is no in-place push, range or map to build it any other
-    /// way, so this is the language's cost on this workload, not a
-    /// workaround.
+    /// `array.push` answers a new array; since rc.5 the `xs = array.push(xs,
+    /// v)` shape moves the local into the call and appends in place, so this
+    /// loop is linear (rc.4 copied the array every iteration — 28 req/s).
     function large() {
         let items = [];
         let i = 0;
@@ -95,9 +92,18 @@ service Bench {
         return @out;
     }
 
-    /// /updates?queries=N — read the row, write a new randomNumber, return
-    /// the row. `update … set` on an `int` column works in rc.4 on both
-    /// backends, so the 0.8 `raw_sql` workaround is gone.
+    /// /updates?queries=N — write a new randomNumber, then read the row
+    /// back: one UPDATE + one SELECT per row, the same two statements the
+    /// other stacks issue.
+    ///
+    /// Not `update … as { … } first`: rc.4/rc.5 lower that to
+    /// `UPDATE … WHERE x.ctid = (SELECT y.ctid … FOR UPDATE LIMIT 1)
+    /// RETURNING …`, and under 64 concurrent writers the inner `FOR UPDATE`
+    /// waits out a competing update and answers the *new* tuple's ctid,
+    /// which the outer statement's snapshot cannot see — 0 rows, `null`,
+    /// and the `or throw NotFound` turned 87% of the Linux run into 404s.
+    /// A bare `update` lowers to `UPDATE … WHERE x.id = $2`, which has no
+    /// such race.
     function updates(n: int) {
         let seed = Bench.seed();
         let out = [];
@@ -105,12 +111,10 @@ service Bench {
         while (i < @n) {
             let id = (seed * 7919 + i * 104729) % 10000 + 1;
             let new_val = (seed * 31 + i * 17) % 10000 + 1;
-            let row = update W of BenchDb.public.World
+            update W of BenchDb.public.World
                 set randomNumber = @new_val
-                where W.id == @id
-                as { W.id, W.randomNumber }
-                first or throw NotFound("no such world row");
-            out = array.push(out, @row);
+                where W.id == @id;
+            out = array.push(out, Bench.one(id));
             i = i + 1;
         }
         return @out;

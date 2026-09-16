@@ -8,7 +8,7 @@
 > 1. **The DB tier is now cross-stack.** `/db`, `/queries` and `/updates` were previously implemented only by `jwc-app`, so the other seven stacks answered 404 and the numbers meant nothing. All eight now run the same TechEmpower-shaped workload against the same `world(id, randomnumber)` table in the same Postgres instance, each with its pool capped at 64.
 > 2. **`jwc-app` moved to JWC v0.8.0.** `jwc build --native --release` works again. Its `/updates` route goes through `raw_sql` rather than `update … set`, because the native backend cannot bind a value into an `int` column.
 >
-> **2026-09-15 — code only, not re-measured.** `_my/jwc-app` has since been rewritten for **JWC 1.0.0-rc.4** (`namespace`/`database`/`table`/`routes`/`service`, `jwc build --release`, `jwc migrate` + a data sidecar). The `/updates` route is back on idiomatic `update … set` — the `int`-column bug is gone in rc.4 — so the `raw_sql` notes below describe the 0.8.0 build the numbers were taken on, not the current source. The numbers below are still the v0.8.0 run.
+> **2026-09-15/16 — `jwc-app` rewritten for JWC 1.0.0-rc.4, re-measured on rc.5.** `_my/jwc-app` now uses the 1.0 language (`namespace`/`database`/`table`/`routes`/`service`, `jwc build --release`, `jwc migrate` + a data sidecar) and its `/updates` route is back on idiomatic `update … set` — the `int`-column bug is gone. The `raw_sql` notes below describe the 0.8.0 build the Windows numbers were taken on, not the current source. See the [Linux re-run](#linux-re-run--2026-09-15) for current numbers.
 >
 > Rankings are stated in **2xx/s** — successful responses per second — not bombardier's `rps`. On this Windows box the 500- and 1000-connection endpoints generate large numbers of client-side `dial tcp: connectex: actively refused` failures from ephemeral-port exhaustion, and bombardier counts those attempts in `rps`. The two figures agree closely at 64 connections and diverge sharply at 1000, where `node-fastify` reports 16,606 rps against **80** successful responses.
 
@@ -41,7 +41,7 @@ for exactly this case.
 | **node-fastify** | Node 22.12.0, Fastify ^5.8.5 | pg 8.22.0 | `node` (V8 JIT) |
 | **python-fastapi** | Python 3.12.4, FastAPI 0.115.14, uvicorn 0.35.0 | asyncpg 0.31.0 | `uvicorn --workers 1` |
 | **rust-axum** | Rust 1.92.0, axum 0.8 | tokio-postgres 0.7 + deadpool 0.14 | `cargo build --release` |
-| **jwc-app** ⭐ | JWC 1.0.0-rc.4 (native AOT → tokio/axum); numbers below are from v0.8.0 | built-in (`database … : Postgres`) | `jwc build --release` |
+| **jwc-app** ⭐ | JWC 1.0.0-rc.5 (native AOT → tokio/axum); Windows numbers below are from v0.8.0 | built-in (`database … : Postgres`) | `jwc build --release` |
 | **liteapi-rust** ⭐ | .NET 10.0 + LiteAPI.Core 2.3.0 (Rust TCP listener — `RunWithRust()`) | Npgsql 9.0.3 | `dotnet publish -c Release` |
 | **liteapi-managed** ⭐ | .NET 10.0 + LiteAPI.Core 2.3.0 (managed `Run()`) | Npgsql 9.0.3 | `dotnet publish -c Release` |
 
@@ -476,6 +476,12 @@ Linux workstation, using the same 8 stacks, 8 endpoints, connection counts,
 15-second measurements, 3-second warm-up, 5-second timeout, and sequential
 server order. The `world` table was reset and reseeded before every server.
 
+**`jwc-app` was re-measured on 2026-09-16** with the same schedule after moving
+to JWC 1.0.0-rc.5 (which fixed the quadratic `array.push`) and rewriting the
+`/updates` route around a compiler bug that turned 87% of its rc.4 responses
+into 404s (details under [Linux Run Notes](#linux-run-notes)). Its eight rows
+below are from that run; the other seven stacks are unchanged from 09-15.
+
 ### Test Environment
 
 | Component | Spec |
@@ -485,7 +491,7 @@ server order. The `world` table was reset and reseeded before every server.
 | **OS** | Ubuntu 26.04, Linux 7.0.0-31-generic |
 | **Bombardier** | v1.2.6 (linux/amd64, fasthttp client) |
 | **Postgres** | 18.6, local `BenchJWCDB`, `world` table seeded with 10,000 rows |
-| **JWC** | 1.0.0-rc.4 native release build |
+| **JWC** | 1.0.0-rc.5 native release build (`jwc-app` rows; the 09-15 run used rc.4) |
 | **Test duration** | 15 s per endpoint (after 3 s warm-up) |
 
 ### Successful Responses Per Second
@@ -495,14 +501,14 @@ Higher is better.
 
 | Endpoint | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th |
 |---|---|---|---|---|---|---|---|---|
-| `/ping` | rust-axum **1,250,978** | jwc-app **1,127,334** | liteapi-rust **1,033,420** | go-fiber **924,214** | dotnet **831,050** | liteapi-managed **150,829** | node **133,078** | python **12,073** |
-| `/json-small` | rust-axum **1,215,154** | jwc-app **1,132,127** | liteapi-rust **965,371** | go-fiber **903,831** | dotnet **794,112** | node **130,621** | liteapi-managed **128,014** | python **11,205** |
-| `/json-large` | rust-axum **127,738** | dotnet **93,589** | go-fiber **82,260** | liteapi-rust **42,314** | liteapi-managed **19,180** | node **10,979** | python **501** | jwc-app **28** |
-| `/cpu` | rust-axum **5,982** | jwc-app **2,083** | go-fiber **1,143** | dotnet **92** | liteapi-rust **90** | liteapi-managed **90** | python **63** | node **7** |
-| `/async-delay` | dotnet **92,648** | go-fiber **92,535** | rust-axum **87,066** | jwc-app **86,023** | liteapi-rust **85,854** | node **74,696** | liteapi-managed **20,546** | python **10,601** |
-| `/db` | go-fiber **389,148** | rust-axum **282,926** | jwc-app **270,697** | liteapi-rust **216,252** | dotnet **209,246** | liteapi-managed **94,840** | node **64,641** | python **7,431** |
-| `/queries` | go-fiber **37,337** | rust-axum **28,750** | jwc-app **26,788** | dotnet **24,279** | liteapi-rust **21,222** | liteapi-managed **17,179** | node **5,912** | python **2,553** |
-| `/updates` | rust-axum **7,191** | go-fiber **6,999** | dotnet **5,204** | liteapi-rust **5,095** | liteapi-managed **4,618** | node **3,085** | jwc-app **1,978** | python **1,664** |
+| `/ping` | rust-axum **1,250,978** | jwc-app **1,125,699** | liteapi-rust **1,033,420** | go-fiber **924,214** | dotnet **831,050** | liteapi-managed **150,829** | node **133,078** | python **12,073** |
+| `/json-small` | rust-axum **1,215,154** | jwc-app **1,132,636** | liteapi-rust **965,371** | go-fiber **903,831** | dotnet **794,112** | node **130,621** | liteapi-managed **128,014** | python **11,205** |
+| `/json-large` | rust-axum **127,738** | dotnet **93,589** | go-fiber **82,260** | liteapi-rust **42,314** | liteapi-managed **19,180** | node **10,979** | jwc-app **9,211** | python **501** |
+| `/cpu` | rust-axum **5,982** | jwc-app **2,046** | go-fiber **1,143** | dotnet **92** | liteapi-rust **90** | liteapi-managed **90** | python **63** | node **7** |
+| `/async-delay` | dotnet **92,648** | go-fiber **92,535** | rust-axum **87,066** | jwc-app **86,097** | liteapi-rust **85,854** | node **74,696** | liteapi-managed **20,546** | python **10,601** |
+| `/db` | go-fiber **389,148** | rust-axum **282,926** | jwc-app **273,707** | liteapi-rust **216,252** | dotnet **209,246** | liteapi-managed **94,840** | node **64,641** | python **7,431** |
+| `/queries` | go-fiber **37,337** | rust-axum **28,750** | jwc-app **26,688** | dotnet **24,279** | liteapi-rust **21,222** | liteapi-managed **17,179** | node **5,912** | python **2,553** |
+| `/updates` | rust-axum **7,191** | go-fiber **6,999** | jwc-app **6,210** | dotnet **5,204** | liteapi-rust **5,095** | liteapi-managed **4,618** | node **3,085** | python **1,664** |
 
 ### Detailed Endpoint Results
 
@@ -515,7 +521,7 @@ request rate and can include failed attempts.
 | Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | **rust-axum** | **1,250,978** | 1,251,692 | 0.32 | 0.71 | 1.41 | 18,765,607 | 0 | 0 |
-| **jwc-app** | **1,127,334** | 1,127,289 | 0.38 | 0.77 | 1.39 | 16,910,313 | 0 | 0 |
+| **jwc-app** | **1,125,699** | 1,126,359 | 0.38 | 0.77 | 1.37 | 16,885,801 | 0 | 0 |
 | **liteapi-rust** | **1,033,419** | 1,033,610 | 0.14 | 0.80 | 7.28 | 15,501,505 | 0 | 0 |
 | **go-fiber** | **924,214** | 924,671 | 0.13 | 1.58 | 3.74 | 13,864,469 | 0 | 0 |
 | **dotnet-minimal** | **831,050** | 831,508 | 0.53 | 0.98 | 2.00 | 12,465,798 | 0 | 0 |
@@ -528,7 +534,7 @@ request rate and can include failed attempts.
 | Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | **rust-axum** | **1,215,154** | 1,215,876 | 0.33 | 0.76 | 1.50 | 18,227,511 | 0 | 0 |
-| **jwc-app** | **1,132,127** | 1,132,252 | 0.38 | 0.76 | 1.33 | 16,982,658 | 0 | 0 |
+| **jwc-app** | **1,132,636** | 1,133,015 | 0.38 | 0.76 | 1.33 | 16,989,861 | 0 | 0 |
 | **liteapi-rust** | **965,371** | 965,383 | 0.15 | 0.96 | 7.45 | 14,481,433 | 0 | 0 |
 | **go-fiber** | **903,831** | 904,120 | 0.14 | 1.61 | 3.81 | 13,558,603 | 0 | 0 |
 | **dotnet-minimal** | **794,112** | 794,730 | 0.56 | 1.02 | 2.03 | 11,912,026 | 0 | 0 |
@@ -546,15 +552,15 @@ request rate and can include failed attempts.
 | **liteapi-rust** | **42,314** | 42,376 | 1.37 | 14.20 | 40.09 | 635,740 | 0 | 0 |
 | **liteapi-managed** | **19,180** | 19,198 | 9.73 | 13.85 | 19.38 | 288,015 | 0 | 0 |
 | **node-fastify** | **10,979** | 10,979 | 18.13 | 18.50 | 19.17 | 164,886 | 0 | 0 |
+| **jwc-app** | **9,211** | 9,215 | 21.20 | 33.36 | 45.37 | 138,361 | 0 | 0 |
 | **python-fastapi** | **501** | 501 | 399.06 | 403.38 | 407.40 | 7,712 | 0 | 0 |
-| **jwc-app** | **28** | 29 | 3,723.10 | 16,485.78 | 22,577.31 | 641 | 0 | 0 |
 
 #### `/cpu` — CPU-Bound Workload (32 connections)
 
 | Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | **rust-axum** | **5,982** | 5,982 | 5.27 | 6.84 | 9.54 | 89,760 | 0 | 0 |
-| **jwc-app** | **2,083** | 2,083 | 15.08 | 17.36 | 22.11 | 31,265 | 0 | 0 |
+| **jwc-app** | **2,046** | 2,046 | 15.40 | 17.71 | 21.98 | 30,707 | 0 | 0 |
 | **go-fiber** | **1,143** | 1,144 | 27.45 | 37.46 | 47.13 | 17,164 | 0 | 0 |
 | **dotnet-minimal** | **92** | 91 | 343.25 | 446.32 | 537.37 | 1,386 | 0 | 0 |
 | **liteapi-rust** | **90** | 89 | 353.34 | 429.88 | 489.76 | 1,368 | 0 | 0 |
@@ -569,7 +575,7 @@ request rate and can include failed attempts.
 | **dotnet-minimal** | **92,648** | 92,808 | 10.72 | 11.57 | 12.94 | 1,390,631 | 0 | 0 |
 | **go-fiber** | **92,535** | 92,614 | 10.74 | 11.45 | 12.07 | 1,388,861 | 0 | 0 |
 | **rust-axum** | **87,066** | 87,250 | 11.48 | 12.02 | 12.50 | 1,306,755 | 0 | 0 |
-| **jwc-app** | **86,023** | 86,133 | 11.62 | 12.26 | 12.88 | 1,291,288 | 0 | 0 |
+| **jwc-app** | **86,097** | 86,235 | 11.63 | 12.22 | 12.81 | 1,292,394 | 0 | 0 |
 | **liteapi-rust** | **85,854** | 86,011 | 10.78 | 14.39 | 18.51 | 1,288,769 | 0 | 0 |
 | **node-fastify** | **74,696** | 74,816 | 12.46 | 13.64 | 14.71 | 1,121,472 | 0 | 0 |
 | **liteapi-managed** | **20,546** | 20,580 | 47.59 | 55.64 | 58.98 | 308,935 | 0 | 0 |
@@ -581,7 +587,7 @@ request rate and can include failed attempts.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | **go-fiber** | **389,148** | 389,162 | 0.15 | 0.25 | 0.59 | 5,837,424 | 0 | 0 |
 | **rust-axum** | **282,926** | 282,933 | 0.18 | 0.42 | 0.72 | 4,243,919 | 0 | 0 |
-| **jwc-app** | **270,697** | 270,709 | 0.20 | 0.37 | 0.77 | 4,060,477 | 0 | 0 |
+| **jwc-app** | **273,707** | 273,723 | 0.20 | 0.36 | 0.74 | 4,105,687 | 0 | 0 |
 | **liteapi-rust** | **216,252** | 216,272 | 0.23 | 0.44 | 1.78 | 3,243,793 | 0 | 0 |
 | **dotnet-minimal** | **209,246** | 209,430 | 0.27 | 0.45 | 0.95 | 3,138,888 | 0 | 0 |
 | **liteapi-managed** | **94,840** | 94,859 | 0.31 | 0.67 | 6.82 | 1,422,628 | 0 | 0 |
@@ -594,7 +600,7 @@ request rate and can include failed attempts.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | **go-fiber** | **37,337** | 37,338 | 1.62 | 2.35 | 3.24 | 560,093 | 0 | 0 |
 | **rust-axum** | **28,750** | 28,750 | 2.12 | 2.94 | 4.26 | 431,297 | 0 | 0 |
-| **jwc-app** | **26,788** | 26,789 | 2.29 | 3.05 | 4.24 | 401,871 | 0 | 0 |
+| **jwc-app** | **26,688** | 26,689 | 2.30 | 3.08 | 4.20 | 400,368 | 0 | 0 |
 | **dotnet-minimal** | **24,279** | 24,283 | 2.41 | 3.61 | 5.42 | 364,281 | 0 | 0 |
 | **liteapi-rust** | **21,222** | 21,226 | 2.64 | 4.62 | 5.98 | 318,421 | 0 | 0 |
 | **liteapi-managed** | **17,179** | 17,181 | 2.54 | 7.89 | 10.59 | 257,726 | 0 | 0 |
@@ -607,11 +613,11 @@ request rate and can include failed attempts.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | **rust-axum** | **7,191** | 7,192 | 8.73 | 9.23 | 10.66 | 107,935 | 0 | 0 |
 | **go-fiber** | **6,999** | 7,000 | 8.88 | 9.53 | 15.52 | 105,050 | 0 | 0 |
+| **jwc-app** | **6,210** | 6,210 | 10.05 | 11.60 | 13.79 | 93,209 | 0 | 0 |
 | **dotnet-minimal** | **5,204** | 5,205 | 12.02 | 13.52 | 18.93 | 78,108 | 0 | 0 |
 | **liteapi-rust** | **5,095** | 5,096 | 12.24 | 14.32 | 16.68 | 76,483 | 0 | 0 |
 | **liteapi-managed** | **4,618** | 4,619 | 12.57 | 17.36 | 20.85 | 69,317 | 0 | 0 |
 | **node-fastify** | **3,085** | 3,084 | 20.46 | 22.11 | 26.23 | 46,316 | 0 | 0 |
-| **jwc-app** | **1,978** | 15,020 | 3.82 | 8.58 | 9.96 | 29,679 | 195,733 | 0 |
 | **python-fastapi** | **1,664** | 1,662 | 38.48 | 39.36 | 60.16 | 24,987 | 0 | 0 |
 
 #### Linux Tail Latency Summary (p99, ms)
@@ -622,16 +628,18 @@ request rate and can include failed attempts.
 | **go-fiber** | 3.74 | 3.81 | 25.41 | 47.13 | **12.07** | **0.59** | **3.24** | 15.52 |
 | **node-fastify** | 4.52 | 4.30 | 19.17 | 25,004.55 | 14.71 | 1.59 | 15.83 | 26.23 |
 | **python-fastapi** | 42.53 | 45.59 | 407.40 | 517.03 | 101.66 | 9.03 | 28.28 | 60.16 |
-| **rust-axum** | 1.41 | 1.50 | **3.30** | **9.54** | 12.50 | 0.72 | 4.26 | 10.66 |
-| **jwc-app** | **1.39** | **1.33** | 22,577.31 | 22.11 | 12.88 | 0.77 | 4.24 | **9.96** |
+| **rust-axum** | 1.41 | 1.50 | **3.30** | **9.54** | 12.50 | 0.72 | 4.26 | **10.66** |
+| **jwc-app** | **1.37** | **1.33** | 45.37 | 21.98 | 12.81 | 0.74 | 4.20 | 13.79 |
 | **liteapi-rust** | 7.28 | 7.45 | 40.09 | 489.76 | 18.51 | 1.78 | 5.98 | 16.68 |
 | **liteapi-managed** | 12.06 | 14.24 | 19.38 | 476.58 | 58.98 | 6.82 | 10.59 | 20.85 |
 
 ### Linux Run Notes
 
-- Linux produced no client-side dial errors in the suite. The only non-2xx responses were 8 HTTP 400s from `node-fastify` on `/cpu` and 195,733 HTTP 400s from `jwc-app` on `/updates`; the table ranks successful responses only.
-- `jwc-app`'s current rc.4 native build is extremely slow on `/json-large` (641 successful responses in 23.06 s). Its `array.push` lowering copies the array on every iteration, making this workload quadratic.
-- `jwc-app`'s `/updates` result is included as measured, but its 195,733 HTTP 400 responses mean the endpoint is not directly comparable to the other seven stacks on this run.
+- Linux produced no client-side dial errors in the suite. The only non-2xx responses were 8 HTTP 400s from `node-fastify` on `/cpu`; the table ranks successful responses only.
+- **`jwc-app` on 09-15 (rc.4)** measured 28 2xx/s on `/json-large` and 1,978 2xx/s with 195,733 non-2xx on `/updates`. Both were JWC defects, not workload differences, and both are gone in the 09-16 re-measurement:
+  - `/json-large`: rc.4's `array.push` copied the array on every iteration, making the 1000-item build quadratic (641 responses in 23 s, p99 22.5 s). rc.5 moves the local into the call and appends in place — 9,211 2xx/s, p99 45 ms.
+  - `/updates`: the non-2xx were **404s**, not 400s. rc.4/rc.5 lower `update … as { … } first` to `UPDATE … WHERE x.ctid = (SELECT y.ctid … FOR UPDATE LIMIT 1) RETURNING …`. Under 64 concurrent writers the inner `FOR UPDATE` waits out a competing update and answers the *new* tuple's ctid, which the outer statement's snapshot cannot see — zero rows, `null`, and the route's `or throw NotFound` became a 404 (87% of requests). Sequentially it never fails. The route now issues a bare `update … set … where W.id == @id` (lowered to a plain `UPDATE … WHERE x.id = $2`, no race) followed by a `select … first` — one UPDATE + one SELECT per row, the same two statements the other stacks issue — and answers 6,210 2xx/s with zero non-2xx. (`jwc explain` also omits the UPDATE from its query list — "1 query" for a program with two.)
+- `jwc-app` was measured on port 8090 instead of 8080 on 09-16 (another service held 8080); the workload and schedule are otherwise identical.
 - Raw results are saved under `.dist/results/<server>/<endpoint>.json`; this run produced all 64 files.
 
 ---
