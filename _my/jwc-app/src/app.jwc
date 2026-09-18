@@ -1,6 +1,7 @@
 namespace app;
 
-// jwc-app benchmark — JWC 1.0.0-rc.5.
+// jwc-app benchmark — JWC 1.0.0-rc.7 (written for rc.4, unchanged in source
+// since rc.5: `jwc fix` had nothing to apply on the move to rc.7).
 //
 // rc.4+ is a different language from the 0.x line this app was first written
 // in: one namespace per file under src/, `database`/`schema`/`table` instead of

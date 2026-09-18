@@ -96,14 +96,13 @@ service Bench {
     /// back: one UPDATE + one SELECT per row, the same two statements the
     /// other stacks issue.
     ///
-    /// Not `update … as { … } first`: rc.4/rc.5 lower that to
-    /// `UPDATE … WHERE x.ctid = (SELECT y.ctid … FOR UPDATE LIMIT 1)
-    /// RETURNING …`, and under 64 concurrent writers the inner `FOR UPDATE`
-    /// waits out a competing update and answers the *new* tuple's ctid,
-    /// which the outer statement's snapshot cannot see — 0 rows, `null`,
-    /// and the `or throw NotFound` turned 87% of the Linux run into 404s.
-    /// A bare `update` lowers to `UPDATE … WHERE x.id = $2`, which has no
-    /// such race.
+    /// Kept as two statements for that parity. `update … as { … } first`
+    /// would do it in one (`UPDATE … RETURNING …`), and since rc.6 it is
+    /// safe to: rc.4/rc.5 named the locked row by `ctid`, which a
+    /// concurrent update moves, so under 64 writers 87% of this route
+    /// answered 404; rc.6 names it by primary key. The bare `update` here
+    /// lowers to `UPDATE … WHERE x.id = $2` — `jwc explain` shows it,
+    /// which it could not before rc.7.
     function updates(n: int) {
         let seed = Bench.seed();
         let out = [];
