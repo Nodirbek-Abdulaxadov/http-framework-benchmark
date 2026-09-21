@@ -2,7 +2,7 @@
   "name": "jwc-app",
   "type": "app",
   "version": "1.0.0",
-  "jwc": "1.0.0-rc.7",
+  "jwc": "1.0.0",
   "entry": "src/app.jwc",
   "dependencies": {}
 }
