@@ -1,7 +1,7 @@
 param([int]$Runs = 3)
 
 $ErrorActionPreference = 'Stop'
-$RESULTS = "C:\Users\nbkab\OneDrive\Ishchi stol\bench\.dist\results"
+$RESULTS = Join-Path $PSScriptRoot 'results'
 
 $servers = 'dotnet-minimal','go-fiber','node-fastify','python-fastapi','rust-axum','jwc-app','liteapi-managed','liteapi-rust'
 $endpoints = 'ping','json-small','json-large','cpu','async-delay'

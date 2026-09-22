@@ -4,42 +4,6 @@
 > one server at a time, 8 endpoints, 15 s per endpoint after a 3 s warm-up.
 > Rankings are **2xx/s** — successful responses per second — not bombardier's `rps`.
 
-**Current run: Linux, 2026-09-21, `jwc-app` on JWC 1.0.1.** The Windows run of
-2026-07-28 (`jwc-app` on JWC v0.8.0) is kept below it. Raw bombardier JSON for
-the current run is under `.dist/results/<server>/<endpoint>.json`; earlier
-Linux runs (09-15, 09-18) under `.dist/results-prev/`.
-
----
-
-## Test Environment
-
-| Component | Spec |
-|---|---|
-| **CPU** | Intel Core Ultra 7 265KF (20 cores) |
-| **RAM** | 30 GiB |
-| **OS** | Ubuntu 26.04, Linux 7.0.0-31-generic |
-| **Bombardier** | v1.2.6 (linux/amd64, fasthttp client) |
-| **Postgres** | 16.15 (snap), local `BenchJWCDB`, `world` table seeded with 10,000 rows |
-| **JWC** | 1.0.1 native release build (`jwc build --release`, installed from the GitHub release) |
-| **Test duration** | 15 s per endpoint (after 3 s warm-up) |
-| **Timeout** | 5 s |
-| **Listen address** | `http://127.0.0.1:8080` (liteapi-rust on `:6080`, liteapi-managed on `:6070`) |
-
-⭐ = projects under `_my/`.
-
-### Framework Versions & Build Flags
-
-| Stack | Runtime / Compiler | DB driver | Build |
-|---|---|---|---|
-| **dotnet-minimal** | .NET 10.0 (Kestrel) | Npgsql 9.0.3 | `dotnet publish -c Release` |
-| **go-fiber** | Go 1.24.0, Fiber v2 | pgx/v5 5.10.0 | `go build -ldflags="-s -w"` |
-| **node-fastify** | Node 22.12.0, Fastify ^5.8.5 | pg 8.22.0 | `node` (V8 JIT) |
-| **python-fastapi** | Python 3.12.4, FastAPI 0.115.14, uvicorn 0.35.0 | asyncpg 0.31.0 | `uvicorn --workers 1` |
-| **rust-axum** | Rust 1.92.0, axum 0.8 | tokio-postgres 0.7 + deadpool 0.14 | `cargo build --release` |
-| **jwc-app** ⭐ | JWC 1.0.1 (native AOT → tokio/axum); Windows numbers below are from v0.8.0 | built-in (`database … : Postgres`) | `jwc build --release` |
-| **liteapi-rust** ⭐ | .NET 10.0 + LiteAPI.Core 2.3.0 (Rust TCP listener — `RunWithRust()`) | Npgsql 9.0.3 | `dotnet publish -c Release` |
-| **liteapi-managed** ⭐ | .NET 10.0 + LiteAPI.Core 2.3.0 (managed `Run()`) | Npgsql 9.0.3 | `dotnet publish -c Release` |
-
 ### Endpoints
 
 | Path | Workload | Connections |
@@ -68,11 +32,36 @@ The `world` table is reset before every server (`TRUNCATE` + reseed +
 
 ---
 
-## Linux — 2026-09-21
+## Linux
 
-Seven stacks measured in one sequential session; `jwc-app` re-measured in
-the same session's conditions on the JWC 1.0.1 release (its 1.0.0 rows are
-under `.dist/results-prev/jwc-app-1.0.0/`).
+| Component | Spec |
+|---|---|
+| **CPU** | Intel Core Ultra 7 265KF (20 cores) |
+| **RAM** | 30 GiB |
+| **OS** | Ubuntu 26.04, Linux 7.0.0-31-generic |
+| **Bombardier** | v1.2.6 (linux/amd64, fasthttp client) |
+| **Postgres** | 16.15 (snap), local `BenchJWCDB`, `world` table seeded with 10,000 rows |
+| **JWC** | 1.0.1 native release build (`jwc build --release`, installed from the GitHub release) |
+| **Test duration** | 15 s per endpoint (after 3 s warm-up) |
+| **Timeout** | 5 s |
+| **Listen address** | `http://127.0.0.1:8080` (liteapi-rust on `:6080`, liteapi-managed on `:6070`) |
+
+⭐ = projects under `_my/`.
+
+### Framework Versions & Build Flags
+
+| Stack | Runtime / Compiler | DB driver | Build |
+|---|---|---|---|
+| **dotnet-minimal** | .NET 10.0 (Kestrel) | Npgsql 9.0.3 | `dotnet publish -c Release` |
+| **go-fiber** | Go 1.24.0, Fiber v2 | pgx/v5 5.10.0 | `go build -ldflags="-s -w"` |
+| **node-fastify** | Node 22.12.0, Fastify ^5.8.5 | pg 8.22.0 | `node` (V8 JIT) |
+| **python-fastapi** | Python 3.12.4, FastAPI 0.115.14, uvicorn 0.35.0 | asyncpg 0.31.0 | `uvicorn --workers 1` |
+| **rust-axum** | Rust 1.92.0, axum 0.8 | tokio-postgres 0.7 + deadpool 0.14 | `cargo build --release` |
+| **jwc-app** ⭐ | JWC 1.0.1 (native AOT → tokio/axum) | built-in (`database … : Postgres`) | `jwc build --release` |
+| **liteapi-rust** ⭐ | .NET 10.0 + LiteAPI.Core 2.3.0 (Rust TCP listener — `RunWithRust()`) | Npgsql 9.0.3 | `dotnet publish -c Release` |
+| **liteapi-managed** ⭐ | .NET 10.0 + LiteAPI.Core 2.3.0 (managed `Run()`) | Npgsql 9.0.3 | `dotnet publish -c Release` |
+
+---
 
 ### Successful Responses Per Second
 
@@ -211,272 +200,196 @@ request rate and can include failed attempts.
 
 ---
 
-## Windows — 2026-07-28
+## Windows
 
-`jwc-app` on JWC v0.8.0. Bombardier counts client-side `dial tcp: actively
-refused` attempts (ephemeral-port exhaustion at 500–1000 connections) in
-`rps`; the tables rank `2xx/s`.
+Same CPU and RAM as the Linux run above, and the same JWC 1.0.1 build, so the
+two sections differ by operating system rather than by hardware or version.
+
+Bombardier still counts client-side `dial tcp: actively refused` attempts in
+`rps`; the tables rank `2xx/s`. Windows' default ephemeral-port range is
+16,384 ports (49152–65535) against a 120 s `TIME_WAIT`, so at 500–1000
+connections some dials are refused no matter how fast the server is. The range
+was left at the default, as in the previous Windows run.
+
+Refused dials are not spread evenly, though. On `/ping` go-fiber loses 2,949
+and rust-axum 1,090, while liteapi-rust loses 1,163,072 — more than a third of
+every dial it was offered — and python-fastapi 85,566. Whatever the port range
+costs, liteapi-rust's embedded Rust listener and uvicorn are dropping
+connections on top of it, so their `2xx/s` sits far below their `rps`.
 
 | Component | Spec |
 |---|---|
-| **CPU** | Intel Core i5-10400 @ 2.90 GHz (6 cores / 12 threads) |
-| **RAM** | 32 GB |
-| **OS** | Windows 11 Pro (10.0.22631) |
+| **CPU** | Intel Core Ultra 7 265KF (20 cores) |
+| **RAM** | 31.6 GB |
+| **OS** | Windows 11 Pro 26H1 (10.0.28000) |
 | **Bombardier** | v1.2.6 (windows/amd64, fasthttp client) |
-| **Postgres** | 5432, database `BenchJWCDB`, `world` table seeded with 10,000 rows |
+| **Postgres** | 18.6 (x64 service), local `BenchJWCDB`, `world` table seeded with 10,000 rows |
+| **JWC** | 1.0.1 native release build (`jwc build --release`) |
 | **Test duration** | 15 s per endpoint (after 3 s warm-up) |
 | **Timeout** | 5 s |
-| **Listen address** | `http://127.0.0.1:8080` (liteapi-rust on `:6080`, liteapi-managed on `:6070`, jwc-app on `http://[::1]:8080`) |
+| **Ephemeral ports** | Windows default — 49152–65535 (16,384), `TIME_WAIT` 120 s |
+| **Listen address** | `http://127.0.0.1:8080` (liteapi-rust on `:6080`, liteapi-managed on `:6070`) |
 
-### Ranking (2xx/s)
+### Toolchains on this run
+
+| Stack | Runtime / Compiler | DB driver |
+|---|---|---|
+| **dotnet-minimal** | .NET SDK 10.0.401, ASP.NET Core 10.0.12 (Kestrel) | Npgsql 9.0.3 |
+| **go-fiber** | Go 1.27.1, Fiber v2.52.13 | pgx/v5 5.10.0 |
+| **node-fastify** | Node 24.21.0, Fastify 5.8.5 | pg 8.22.0 |
+| **python-fastapi** | Python 3.13.15, FastAPI 0.141.1, uvicorn 0.53.0 | asyncpg 0.31.0 |
+| **rust-axum** | Rust 1.98.1, axum 0.8.9 | tokio-postgres 0.7.18 + deadpool 0.12.3 |
+| **jwc-app** ⭐ | JWC 1.0.1 (native AOT → tokio/axum), rustc 1.98.1 | built-in (`database … : Postgres`) |
+| **liteapi-rust** ⭐ | .NET 10.0 + LiteAPI.Core 2.3.0 (Rust TCP listener) | Npgsql 9.0.3 |
+| **liteapi-managed** ⭐ | .NET 10.0 + LiteAPI.Core 2.3.0 (managed `Run()`) | Npgsql 9.0.3 |
+
+### Successful Responses Per Second
 
 | Endpoint | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th |
 |---|---|---|---|---|---|---|---|---|
-| `/ping` | go-fiber | dotnet | **jwc-app** | rust-axum | **liteapi-rust** | **liteapi-managed** | node | python |
-| `/json-small` | go-fiber | dotnet | rust-axum | **jwc-app** | **liteapi-rust** | **liteapi-managed** | node | python |
-| `/json-large` | dotnet | rust-axum | **jwc-app** | go-fiber | **liteapi-managed** | **liteapi-rust** | node | python |
-| `/cpu` | rust-axum | go-fiber | **jwc-app** | dotnet | **liteapi-rust** | **liteapi-managed** | python | node |
-| `/async-delay` | **jwc-app** | rust-axum | **liteapi-rust** | **liteapi-managed** | go-fiber | dotnet | python | node |
-| `/db` | go-fiber | rust-axum | **jwc-app** | dotnet | **liteapi-rust** | **liteapi-managed** | node | python |
-| `/queries` | go-fiber | rust-axum | **jwc-app** | dotnet | **liteapi-rust** | **liteapi-managed** | node | python |
-| `/updates` | go-fiber | rust-axum | **jwc-app** | dotnet | **liteapi-rust** | **liteapi-managed** | node | python |
+| `/ping` | go-fiber **838,840** | dotnet **789,702** | rust-axum **244,488** | jwc-app **224,385** | liteapi-rust **131,703** | node **94,883** | liteapi-managed **93,547** | python **15,371** |
+| `/json-small` | go-fiber **851,093** | dotnet **785,855** | rust-axum **240,984** | jwc-app **240,455** | liteapi-rust **139,469** | liteapi-managed **104,759** | node **96,625** | python **13,826** |
+| `/json-large` | dotnet **132,828** | jwc-app **95,016** | rust-axum **86,260** | go-fiber **57,906** | liteapi-rust **32,650** | liteapi-managed **29,290** | node **9,640** | python **388** |
+| `/cpu` | rust-axum **3,875** | jwc-app **2,065** | go-fiber **1,052** | liteapi-managed **94** | dotnet **83** | liteapi-rust **73** | python **40** | node **13** |
+| `/async-delay` | go-fiber **95,176** | jwc-app **61,733** | rust-axum **61,625** | dotnet **59,676** | node **31,957** | liteapi-managed **13,848** | liteapi-rust **12,154** | python **11,143** |
+| `/db` | go-fiber **241,838** | dotnet **233,534** | liteapi-rust **154,114** | rust-axum **108,452** | jwc-app **101,438** | liteapi-managed **54,817** | node **44,167** | python **6,686** |
+| `/queries` | go-fiber **24,377** | dotnet **16,823** | liteapi-rust **13,394** | liteapi-managed **13,156** | rust-axum **11,093** | jwc-app **10,203** | node **4,336** | python **1,619** |
+| `/updates` | go-fiber **6,454** | dotnet **5,347** | liteapi-rust **4,821** | rust-axum **4,676** | liteapi-managed **4,623** | jwc-app **4,375** | node **1,574** | python **919** |
 
-### /ping — Plain Text (500 connections)
+### Detailed Endpoint Results
 
-```
-Successful RPS (2xx/s) — higher is better
-go-fiber         ████████████████████████████████████████ 197,311
-dotnet-minimal   ████████████████████████████████         156,705
-jwc-app          ██████████████████████████               127,723  ⭐
-rust-axum        ██████████████████████████               127,722
-liteapi-rust     █████████████████                        84,833  ⭐
-liteapi-managed  ███████████                              54,085  ⭐
-node-fastify     ████                                     20,503
-python-fastapi   █                                        4,202
-```
+`2xx/s` is completed successful responses per second; `rps` is bombardier's
+request rate and can include failed attempts.
+
+#### `/ping` — Plain Text (500 connections)
+
 | Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| **go-fiber** | **197,311** | 198,901 | <1.0 | 1.00 | 1.53 | 2,960,369 | 15,538 | 15,538 |
-| **dotnet-minimal** | 156,705 | 157,541 | <1.0 | 1.01 | 4.93 | 2,352,688 | 18,938 | 18,938 |
-| ⭐ **jwc-app** | 127,723 | 129,865 | 3.17 | 5.49 | 22.44 | 1,916,291 | 30,727 | 30,727 |
-| **rust-axum** | 127,722 | 127,936 | 3.72 | 5.87 | 8.48 | 1,916,266 | 69 | 69 |
-| ⭐ **liteapi-rust** | 84,833 | 116,383 | 2.35 | 3.96 | 42.97 | 1,664,036 | 80,754 | 80,754 |
-| ⭐ **liteapi-managed** | 54,085 | 54,075 | 10.47 | 12.15 | 24.29 | 811,754 | 0 | 0 |
-| **node-fastify** | 20,503 | 22,158 | 21.98 | 24.02 | 29.16 | 307,994 | 24,509 | 24,509 |
-| **python-fastapi** | 4,202 | 9,421 | 23.14 | 85.87 | 107.12 | 63,361 | 78,340 | 78,340 |
+| **go-fiber** | **838,840** | 839,254 | 0.00 | 1.74 | 2.50 | 12,582,700 | 0 | 2,949 |
+| **dotnet-minimal** | **789,702** | 789,901 | 0.50 | 1.74 | 2.17 | 11,846,353 | 0 | 2,697 |
+| **rust-axum** | **244,488** | 244,629 | 1.96 | 2.97 | 4.11 | 3,667,829 | 0 | 1,090 |
+| **jwc-app** | **224,385** | 224,472 | 2.16 | 3.33 | 4.63 | 3,366,136 | 0 | 721 |
+| **liteapi-rust** | **131,703** | 227,656 | 1.03 | 5.38 | 11.32 | 2,232,068 | 0 | 1,163,072 |
+| **node-fastify** | **94,883** | 95,154 | 5.23 | 5.87 | 9.47 | 1,423,775 | 0 | 3,905 |
+| **liteapi-managed** | **93,547** | 93,467 | 1.59 | 13.37 | 23.56 | 1,403,407 | 0 | 0 |
+| **python-fastapi** | **15,371** | 21,048 | 31.20 | 32.65 | 42.53 | 230,915 | 0 | 85,566 |
+
+#### `/json-small` — Tiny JSON Object (500 connections)
+
+| Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| **go-fiber** | **851,093** | 852,577 | 0.50 | 1.74 | 2.51 | 12,766,696 | 0 | 4,221 |
+| **dotnet-minimal** | **785,855** | 785,983 | 0.50 | 1.74 | 2.25 | 11,788,753 | 0 | 4,024 |
+| **rust-axum** | **240,984** | 241,192 | 2.02 | 3.05 | 4.31 | 3,615,055 | 0 | 1,987 |
+| **jwc-app** | **240,455** | 240,603 | 2.02 | 3.08 | 4.35 | 3,607,270 | 0 | 1,700 |
+| **liteapi-rust** | **139,469** | 216,546 | 1.05 | 5.43 | 12.39 | 2,093,021 | 0 | 1,138,511 |
+| **liteapi-managed** | **104,759** | 104,888 | 1.56 | 12.52 | 17.26 | 1,572,361 | 0 | 0 |
+| **node-fastify** | **96,625** | 96,914 | 5.10 | 5.53 | 6.16 | 1,449,852 | 0 | 3,994 |
+| **python-fastapi** | **13,826** | 20,649 | 34.40 | 35.84 | 45.66 | 207,728 | 0 | 103,441 |
+
+#### `/json-large` — 1000-item JSON Array (200 connections, ~42 KB body)
+
+| Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| **dotnet-minimal** | **132,828** | 132,874 | 1.50 | 2.45 | 3.98 | 1,992,470 | 0 | 0 |
+| **jwc-app** | **95,016** | 95,055 | 2.06 | 3.09 | 4.13 | 1,425,382 | 0 | 0 |
+| **rust-axum** | **86,260** | 86,281 | 2.23 | 3.45 | 4.91 | 1,294,108 | 0 | 0 |
+| **go-fiber** | **57,906** | 57,915 | 1.23 | 10.90 | 22.43 | 868,781 | 0 | 0 |
+| **liteapi-rust** | **32,650** | 32,676 | 4.14 | 10.19 | 48.64 | 489,841 | 0 | 0 |
+| **liteapi-managed** | **29,290** | 29,325 | 5.04 | 16.23 | 29.87 | 439,491 | 0 | 0 |
+| **node-fastify** | **9,640** | 9,641 | 20.61 | 21.39 | 22.67 | 144,799 | 0 | 0 |
+| **python-fastapi** | **388** | 22,871 | 0.00 | 0.00 | 269.76 | 6,122 | 0 | 338,119 |
+
+#### `/cpu` — CPU-Bound Workload (32 connections)
+
+| Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| **rust-axum** | **3,875** | 3,874 | 8.13 | 10.71 | 12.69 | 58,171 | 0 | 0 |
+| **jwc-app** | **2,065** | 2,069 | 15.32 | 17.82 | 20.49 | 31,000 | 0 | 0 |
+| **go-fiber** | **1,052** | 1,052 | 28.89 | 37.08 | 64.81 | 15,792 | 0 | 0 |
+| **liteapi-managed** | **94** | 97 | 312.81 | 476.67 | 700.64 | 1,431 | 0 | 0 |
+| **dotnet-minimal** | **83** | 87 | 370.90 | 483.45 | 528.55 | 1,270 | 0 | 0 |
+| **liteapi-rust** | **73** | 88 | 420.77 | 574.15 | 675.24 | 1,117 | 0 | 0 |
+| **python-fastapi** | **40** | 44 | 792.75 | 799.07 | 3170.54 | 624 | 0 | 0 |
+| **node-fastify** | **13** | 12 | 2309.80 | 2665.26 | 2720.11 | 228 | 0 | 0 |
+
+#### `/async-delay` — 10 ms `await sleep` (1000 connections)
+
+| Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| **go-fiber** | **95,176** | 95,585 | 10.39 | 10.82 | 11.51 | 1,428,658 | 0 | 4,667 |
+| **jwc-app** | **61,733** | 61,914 | 15.85 | 17.20 | 25.27 | 927,045 | 0 | 3,682 |
+| **rust-axum** | **61,625** | 62,189 | 15.88 | 17.29 | 25.09 | 925,085 | 0 | 8,336 |
+| **dotnet-minimal** | **59,676** | 60,457 | 16.20 | 19.29 | 25.09 | 895,305 | 0 | 10,978 |
+| **node-fastify** | **31,957** | 32,257 | 31.74 | 32.58 | 37.08 | 479,759 | 0 | 4,662 |
+| **liteapi-managed** | **13,848** | 13,859 | 68.54 | 84.84 | 101.16 | 208,789 | 0 | 0 |
+| **liteapi-rust** | **12,154** | 87,050 | 10.29 | 19.09 | 31.12 | 182,386 | 0 | 1,123,268 |
+| **python-fastapi** | **11,143** | 35,579 | 4.95 | 84.58 | 105.73 | 167,781 | 0 | 365,179 |
+
+#### `/db` — Single Random Row (64 connections)
+
+| Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| **go-fiber** | **241,838** | 241,869 | 0.00 | 0.56 | 1.27 | 3,627,492 | 0 | 0 |
+| **dotnet-minimal** | **233,534** | 233,586 | 0.00 | 0.59 | 2.57 | 3,503,127 | 0 | 0 |
+| **liteapi-rust** | **154,114** | 154,148 | 0.00 | 0.59 | 6.16 | 2,311,696 | 0 | 0 |
+| **rust-axum** | **108,452** | 108,463 | 0.53 | 1.04 | 1.16 | 1,626,743 | 0 | 0 |
+| **jwc-app** | **101,438** | 101,469 | 0.54 | 1.06 | 1.19 | 1,521,605 | 0 | 0 |
+| **liteapi-managed** | **54,817** | 54,904 | 0.51 | 0.95 | 13.73 | 822,273 | 0 | 0 |
+| **node-fastify** | **44,167** | 44,222 | 1.54 | 1.69 | 2.11 | 662,529 | 0 | 0 |
+| **python-fastapi** | **6,686** | 6,686 | 8.79 | 9.92 | 15.33 | 100,316 | 0 | 0 |
+
+#### `/queries` — 20 Random Rows per Request (64 connections)
+
+| Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| **go-fiber** | **24,377** | 24,382 | 2.10 | 4.76 | 11.61 | 365,683 | 0 | 0 |
+| **dotnet-minimal** | **16,823** | 16,828 | 3.12 | 7.00 | 18.50 | 252,399 | 0 | 0 |
+| **liteapi-rust** | **13,394** | 13,403 | 3.12 | 9.36 | 33.54 | 200,992 | 0 | 0 |
+| **liteapi-managed** | **13,156** | 13,167 | 3.21 | 10.36 | 22.05 | 197,383 | 0 | 0 |
+| **rust-axum** | **11,093** | 11,093 | 5.74 | 6.54 | 7.30 | 166,419 | 0 | 0 |
+| **jwc-app** | **10,203** | 10,203 | 6.24 | 7.12 | 7.95 | 153,075 | 0 | 0 |
+| **node-fastify** | **4,336** | 4,336 | 14.63 | 15.44 | 19.16 | 65,083 | 0 | 0 |
+| **python-fastapi** | **1,619** | 1,619 | 39.15 | 40.76 | 46.14 | 24,314 | 0 | 0 |
+
+#### `/updates` — 20 Read+Write Rows per Request (64 connections)
+
+| Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| **go-fiber** | **6,454** | 6,457 | 9.00 | 11.62 | 25.35 | 96,854 | 0 | 0 |
+| **dotnet-minimal** | **5,347** | 5,351 | 11.10 | 14.20 | 31.78 | 80,257 | 0 | 0 |
+| **liteapi-rust** | **4,821** | 4,823 | 12.35 | 16.66 | 28.71 | 72,378 | 0 | 0 |
+| **rust-axum** | **4,676** | 4,676 | 13.49 | 14.77 | 19.94 | 70,175 | 0 | 0 |
+| **liteapi-managed** | **4,623** | 4,625 | 12.50 | 19.39 | 35.03 | 69,377 | 0 | 0 |
+| **jwc-app** | **4,375** | 4,375 | 14.40 | 16.02 | 21.62 | 65,656 | 0 | 0 |
+| **node-fastify** | **1,574** | 1,574 | 40.49 | 42.60 | 54.49 | 23,651 | 0 | 0 |
+| **python-fastapi** | **919** | 918 | 69.03 | 71.72 | 89.18 | 13,821 | 0 | 0 |
 
 \* bombardier's `rps`, which counts failed dial attempts as requests.
 
-### /json-small — Tiny JSON Object (500 connections)
-
-```
-Successful RPS (2xx/s) — higher is better
-go-fiber         ████████████████████████████████████████ 192,866
-dotnet-minimal   ███████████████████████████████          150,530
-rust-axum        ██████████████████████████               125,890
-jwc-app          ██████████████████████████               124,984  ⭐
-liteapi-rust     ████████████████████████                 114,405  ⭐
-liteapi-managed  ███████████                              53,281  ⭐
-node-fastify     ████                                     19,464
-python-fastapi   █                                        3,711
-```
-| Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| **go-fiber** | **192,866** | 193,570 | <1.0 | 1.01 | 2.36 | 2,893,729 | 12,327 | 12,327 |
-| **dotnet-minimal** | 150,530 | 152,123 | <1.0 | 1.00 | 80.01 | 2,260,631 | 25,141 | 25,141 |
-| **rust-axum** | 125,890 | 126,086 | 3.76 | 5.99 | 8.82 | 1,888,720 | 408 | 408 |
-| ⭐ **jwc-app** | 124,984 | 127,648 | 3.11 | 5.62 | 25.49 | 1,875,275 | 32,534 | 32,534 |
-| ⭐ **liteapi-rust** | 114,405 | 119,602 | 1.74 | 3.45 | 40.48 | 1,716,371 | 71,643 | 71,643 |
-| ⭐ **liteapi-managed** | 53,281 | 53,305 | 10.62 | 12.74 | 22.44 | 799,602 | 0 | 0 |
-| **node-fastify** | 19,464 | 21,004 | 23.52 | 24.86 | 32.22 | 292,426 | 22,364 | 22,364 |
-| **python-fastapi** | 3,711 | 9,307 | 19.86 | 93.24 | 110.60 | 55,924 | 83,990 | 83,990 |
-
-### /json-large — 1000-item JSON Array (200 connections, ~42 KB body)
-
-```
-Successful RPS (2xx/s) — higher is better
-dotnet-minimal   ████████████████████████████████████████ 20,439
-rust-axum        ████████████████████████████████████████ 20,352
-jwc-app          █████████████████████████████            14,645  ⭐
-go-fiber         ███████████████████████████              13,737
-liteapi-managed  █████████████████████                    10,917  ⭐
-liteapi-rust     ██████████████                           7,134  ⭐
-node-fastify     ███████                                  3,603
-python-fastapi   █                                        114
-```
-| Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| **dotnet-minimal** | **20,439** | 20,184 | 9.60 | 13.29 | 26.18 | 306,630 | 0 | 0 |
-| **rust-axum** | 20,352 | 20,453 | 9.56 | 14.48 | 20.07 | 305,461 | 0 | 0 |
-| ⭐ **jwc-app** | 14,645 | 14,783 | 13.37 | 20.01 | 27.72 | 219,717 | 0 | 0 |
-| **go-fiber** | 13,737 | 13,930 | 4.54 | 50.06 | 102.78 | 206,258 | 0 | 0 |
-| ⭐ **liteapi-managed** | 10,917 | 10,927 | 14.21 | 38.56 | 68.06 | 163,991 | 0 | 0 |
-| ⭐ **liteapi-rust** | 7,134 | 7,636 | 8.68 | 34.43 | 413.84 | 107,192 | 7,416 | 7,416 |
-| **node-fastify** | 3,603 | 3,603 | 56.83 | 61.48 | 74.75 | 54,238 | 0 | 0 |
-| **python-fastapi** | 114 | 8,603 | 6.79 | 11.03 | 521.02 | 1,910 | 127,450 | 127,450 |
-
-### /cpu — CPU-Bound Workload (32 connections)
-
-```
-Successful RPS (2xx/s) — higher is better
-rust-axum        ████████████████████████████████████████ 166
-go-fiber         ████████████████████████████             118
-jwc-app          ██████████████████████████               109  ⭐
-dotnet-minimal   ██████████████████████████               109
-liteapi-rust     █████████████████████████                105  ⭐
-liteapi-managed  ███████████████████████                  96  ⭐
-python-fastapi   ██                                       10
-node-fastify     █                                        1
-```
-| Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| **rust-axum** | **166** | 167 | 192.37 | 260.39 | 312.15 | 2,514 | 0 | 0 |
-| **go-fiber** | 118 | 117 | 267.45 | 361.19 | 457.29 | 1,783 | 0 | 0 |
-| ⭐ **jwc-app** | 109 | 109 | 295.71 | 400.28 | 470.57 | 1,669 | 0 | 0 |
-| **dotnet-minimal** | 109 | 123 | 288.52 | 387.76 | 434.19 | 1,648 | 0 | 0 |
-| ⭐ **liteapi-rust** | 105 | 104 | 245.30 | 500.50 | 964.52 | 1,598 | 0 | 0 |
-| ⭐ **liteapi-managed** | 96 | 97 | 270.33 | 598.84 | 1,086.42 | 1,474 | 0 | 0 |
-| **python-fastapi** | 10 | 11 | 1,571.43 | 2,371.60 | 18,957.31 | 196 | 0 | 0 |
-| **node-fastify** | 1 | 2 | 25,001.86 | 25,003.98 | 25,004.49 | 26 | 31 | 31 |
-
-### /async-delay — 10 ms `await sleep` (1000 connections)
-
-```
-Successful RPS (2xx/s) — higher is better
-jwc-app          ████████████████████████████████████████ 20,453  ⭐
-rust-axum        ██████████████████████████████████████   19,183
-liteapi-rust     ███████████████████████████████          15,626  ⭐
-liteapi-managed  █████████████████████████████            14,925  ⭐
-go-fiber         █████████████████████████████            14,622
-dotnet-minimal   █████████████                            6,568
-python-fastapi   █                                        458
-node-fastify     █                                        5
-```
-| Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| ⭐ **jwc-app** | **20,453** | 31,941 | 16.11 | 52.64 | 64.37 | 307,178 | 172,575 | 172,575 |
-| **rust-axum** | 19,183 | 31,174 | 16.29 | 52.71 | 63.79 | 288,336 | 180,028 | 180,028 |
-| ⭐ **liteapi-rust** | 15,626 | 28,726 | 16.77 | 57.87 | 72.57 | 234,711 | 196,603 | 196,603 |
-| ⭐ **liteapi-managed** | 14,925 | 14,939 | 63.15 | 78.60 | 93.94 | 224,671 | 0 | 0 |
-| **go-fiber** | 14,622 | 29,137 | 13.09 | 54.11 | 60.14 | 219,714 | 215,953 | 215,953 |
-| **dotnet-minimal** | 6,568 | 17,004 | 66.29 | 86.11 | 105.84 | 98,693 | 155,270 | 155,270 |
-| **python-fastapi** | 458 | 16,090 | 47.92 | 59.16 | 298.60 | 6,908 | 234,517 | 234,517 |
-| **node-fastify** | 5 | 16,606 | 55.29 | 60.09 | 80.76 | 80 | 248,743 | 248,743 |
-
-### /db — Single Random Row (64 connections)
-
-```
-Successful RPS (2xx/s) — higher is better
-go-fiber         ████████████████████████████████████████ 66,018
-rust-axum        ████████████████████████████████         52,565
-jwc-app          ███████████████████████████████          51,535  ⭐
-dotnet-minimal   ████████████████████████                 39,109
-liteapi-rust     ███████████████████                      31,020  ⭐
-liteapi-managed  █████████████                            22,050  ⭐
-node-fastify     ██████                                   10,110
-python-fastapi   █                                        2,463
-```
-| Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| **go-fiber** | **66,018** | 65,994 | <1.0 | 1.51 | 2.97 | 990,459 | 0 | 0 |
-| **rust-axum** | 52,565 | 52,587 | 1.14 | 1.75 | 2.49 | 788,522 | 0 | 0 |
-| ⭐ **jwc-app** | 51,535 | 51,544 | 1.15 | 1.78 | 2.59 | 773,075 | 0 | 0 |
-| **dotnet-minimal** | 39,109 | 39,114 | 1.46 | 2.33 | 6.05 | 586,658 | 0 | 0 |
-| ⭐ **liteapi-rust** | 31,020 | 31,033 | 1.63 | 3.31 | 8.28 | 465,317 | 0 | 0 |
-| ⭐ **liteapi-managed** | 22,050 | 22,092 | 1.69 | 8.60 | 16.06 | 330,761 | 0 | 0 |
-| **node-fastify** | 10,110 | 10,112 | 6.07 | 6.83 | 9.72 | 151,697 | 0 | 0 |
-| **python-fastapi** | 2,463 | 2,462 | 23.35 | 25.68 | 44.52 | 36,973 | 0 | 0 |
-
-### /queries — 20 Random Rows per Request (64 connections)
-
-```
-Successful RPS (2xx/s) — higher is better
-go-fiber         ████████████████████████████████████████ 5,506
-rust-axum        ██████████████████████████████████████   5,263
-jwc-app          ██████████████████████████████████████   5,198  ⭐
-dotnet-minimal   ███████████████████████                  3,104
-liteapi-rust     █████████████████████                    2,908  ⭐
-liteapi-managed  ████████████████████                     2,753  ⭐
-node-fastify     ███████                                  1,011
-python-fastapi   ████                                     534
-```
-| Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| **go-fiber** | **5,506** | 5,506 | 10.14 | 14.03 | 61.59 | 82,678 | 0 | 0 |
-| **rust-axum** | 5,263 | 5,264 | 11.84 | 13.89 | 18.99 | 78,978 | 0 | 0 |
-| ⭐ **jwc-app** | 5,198 | 5,199 | 11.98 | 14.21 | 18.69 | 78,000 | 0 | 0 |
-| **dotnet-minimal** | 3,104 | 3,106 | 19.61 | 25.23 | 37.18 | 46,598 | 0 | 0 |
-| ⭐ **liteapi-rust** | 2,908 | 2,924 | 21.30 | 26.29 | 37.79 | 43,668 | 0 | 0 |
-| ⭐ **liteapi-managed** | 2,753 | 2,765 | 22.48 | 28.71 | 40.26 | 41,331 | 0 | 0 |
-| **node-fastify** | 1,011 | 1,007 | 61.84 | 67.30 | 88.22 | 15,168 | 0 | 0 |
-| **python-fastapi** | 534 | 533 | 113.62 | 120.17 | 179.10 | 8,041 | 0 | 0 |
-
-### /updates — 20 Read+Write Rows per Request (64 connections)
-
-```
-Successful RPS (2xx/s) — higher is better
-go-fiber         ████████████████████████████████████████ 2,150
-rust-axum        ████████████████████████████████████████ 2,129
-jwc-app          ██████████████████████████████████       1,841  ⭐
-dotnet-minimal   █████████████████████████                1,323
-liteapi-rust     ████████████████████████                 1,272  ⭐
-liteapi-managed  ██████████████████████                   1,201  ⭐
-node-fastify     █████████                                497
-python-fastapi   ██████                                   324
-```
-| Server | 2xx/s | RPS mean* | p50 (ms) | p90 (ms) | p99 (ms) | 2xx | non-2xx | client errors |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| **go-fiber** | **2,150** | 2,160 | 26.04 | 42.26 | 98.61 | 32,298 | 0 | 0 |
-| **rust-axum** | 2,129 | 2,132 | 28.27 | 36.13 | 54.96 | 32,017 | 0 | 0 |
-| ⭐ **jwc-app** | 1,841 | 1,846 | 31.96 | 46.69 | 68.19 | 27,682 | 0 | 0 |
-| **dotnet-minimal** | 1,323 | 1,332 | 45.84 | 60.54 | 80.74 | 19,887 | 0 | 0 |
-| ⭐ **liteapi-rust** | 1,272 | 1,274 | 47.91 | 60.82 | 87.38 | 19,107 | 0 | 0 |
-| ⭐ **liteapi-managed** | 1,201 | 1,204 | 50.71 | 64.49 | 91.61 | 18,069 | 0 | 0 |
-| **node-fastify** | 497 | 496 | 126.06 | 139.62 | 157.12 | 7,488 | 0 | 0 |
-| **python-fastapi** | 324 | 322 | 195.12 | 204.94 | 270.06 | 4,881 | 0 | 0 |
-
-### Aggregate Throughput (sum of all 8 endpoints)
-
-```
-Total successful RPS (2xx/s) — higher is better
-go-fiber         ████████████████████████████████████████ 492,329
-dotnet-minimal   ███████████████████████████████          377,886
-rust-axum        █████████████████████████████            353,269
-jwc-app          ████████████████████████████             346,489  ⭐
-liteapi-rust     █████████████████████                    257,303  ⭐
-liteapi-managed  █████████████                            159,307  ⭐
-node-fastify     ████                                     55,193
-python-fastapi   █                                        11,816
-```
-| Server | Total 2xx/s | Total 2xx | Total Bytes | non-2xx | Client Errors | Endpoints |
-|---|---:|---:|---:|---:|---:|---:|
-| **go-fiber** | **492,329** | 7,387,288 | 8.98 GB | 243,818 | 243,818 | 8/8 |
-| **dotnet-minimal** | 377,886 | 5,673,433 | 12.79 GB | 199,349 | 199,349 | 8/8 |
-| **rust-axum** | 353,269 | 5,300,814 | 12.56 GB | 180,505 | 180,505 | 8/8 |
-| ⭐ **jwc-app** | 346,489 | 5,198,887 | 9.22 GB | 235,836 | 235,836 | 8/8 |
-| ⭐ **liteapi-rust** | 257,303 | 4,252,000 | 4.79 GB | 356,416 | 356,416 | 8/8 |
-| ⭐ **liteapi-managed** | 159,307 | 2,391,653 | 6.88 GB | 0 | 0 | 8/8 |
-| **node-fastify** | 55,193 | 829,117 | 2.26 GB | 295,647 | 295,647 | 8/8 |
-| **python-fastapi** | 11,816 | 178,194 | 108.34 MB | 524,297 | 524,297 | 8/8 |
-
-### Tail-Latency Summary (p99 across all endpoints, ms — lower is better)
+### Tail Latency (p99, ms)
 
 | Server | `/ping` | `/json-small` | `/json-large` | `/cpu` | `/async-delay` | `/db` | `/queries` | `/updates` |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| **go-fiber** | **1.53** | **2.36** | 102.78 | 457.29 | **60.14** | 2.97 | 61.59 | 98.61 |
-| **dotnet-minimal** | 4.93 | 80.01 | 26.18 | 434.19 | 105.84 | 6.05 | 37.18 | 80.74 |
-| **rust-axum** | 8.48 | 8.82 | **20.07** | **312.15** | 63.79 | **2.49** | 18.99 | **54.96** |
-| ⭐ **jwc-app** | 22.44 | 25.49 | 27.72 | 470.57 | 64.37 | 2.59 | **18.69** | 68.19 |
-| ⭐ **liteapi-managed** | 24.29 | 22.44 | 68.06 | 1,086.42 | 93.94 | 16.06 | 40.26 | 91.61 |
-| **node-fastify** | 29.16 | 32.22 | 74.75 | 25,004.49 | 80.76 | 9.72 | 88.22 | 157.12 |
-| ⭐ **liteapi-rust** | 42.97 | 40.48 | 413.84 | 964.52 | 72.57 | 8.28 | 37.79 | 87.38 |
-| **python-fastapi** | 107.12 | 110.60 | 521.02 | 18,957.31 | 298.60 | 44.52 | 179.10 | 270.06 |
+| **dotnet-minimal** | **2.17** | **2.25** | **3.98** | 528.55 | 25.09 | 2.57 | 18.50 | 31.78 |
+| **go-fiber** | 2.50 | 2.51 | 22.43 | 64.81 | **11.51** | 1.27 | 11.61 | 25.35 |
+| **node-fastify** | 9.47 | 6.16 | 22.67 | 2,720.11 | 37.08 | 2.11 | 19.16 | 54.49 |
+| **python-fastapi** | 42.53 | 45.66 | 269.76 | 3,170.54 | 105.73 | 15.33 | 46.14 | 89.18 |
+| **rust-axum** | 4.11 | 4.31 | 4.91 | **12.69** | 25.09 | **1.16** | **7.30** | **19.94** |
+| **jwc-app** | 4.63 | 4.35 | 4.13 | 20.49 | 25.27 | 1.19 | 7.95 | 21.62 |
+| **liteapi-rust** | 11.32 | 12.39 | 48.64 | 675.24 | 31.12 | 6.16 | 33.54 | 28.71 |
+| **liteapi-managed** | 23.56 | 17.26 | 29.87 | 700.64 | 101.16 | 13.73 | 22.05 | 35.03 |
 
 ---
 
 ## Reproduce
 
 ```powershell
+# 0. Load generator + interpreted-stack deps
+go install github.com/codesenberg/bombardier@v1.2.6   # or drop bombardier.exe in .dist/
+npm --prefix ./node-fastify install
+pip install fastapi "uvicorn[standard]" asyncpg
+
 # 1. Build all (Release / Native)
 dotnet publish ./dotnet-minimal -c Release -o ./dotnet-minimal/publish
 go -C ./go-fiber build -ldflags="-s -w" -o go-fiber.exe main.go
@@ -493,50 +406,23 @@ jwc migrate up --create-db             # creates + seeds world(id, randomnumber)
 
 # (or one server at a time)
 ./.dist/bench.ps1 -Name jwc-app -StartCmd './bin/release/jwc-app.exe' `
-                  -WorkDir "$PWD\_my\jwc-app" -Port 8080 -BindHost '[::1]'
+                  -WorkDir "$PWD\_my\jwc-app" -Port 8080
 
 ./.dist/report.ps1                     # regenerate summary JSON from saved results
+python ./.dist/gen-tables.py ./.dist/results   # regenerate the README tables
 ```
 
+The scripts resolve the repo root from their own location, and take bombardier
+from `.dist/bombardier.exe` if present, otherwise from `PATH`. `-BindHost` only
+matters for a server that does not listen on IPv4; JWC binds dual-stack from
+1.0.1 on, so the `[::1]` workaround needed up to v0.8.0 is gone.
+
 All stacks read `DATABASE_URL` and fall back to
-`postgres://postgres:1234@localhost:5432/BenchJWCDB`. `jwc-app` additionally
-reads `PG_HOST` / `PG_PORT` / `PG_USER` / `PG_PASSWORD` / `PG_DATABASE` from
-`_my/jwc-app/.env`.
+`postgres://postgres:1234@localhost:5432/BenchJWCDB`. `jwc-app` reads
+`DATABASE_URL` (or `JWC_DATABASE_URL`) and `PORT` from `_my/jwc-app/.env`; the
+older `PG_HOST` / `PG_PORT` / `PG_USER` / `PG_PASSWORD` / `PG_DATABASE` split is
+JWC 0.x only.
 
 Raw bombardier JSON per endpoint is saved under `.dist/results/<server>/<endpoint>.json`;
 the merged summary is `.dist/results/summary.json`.
 
-### Run on a cloud server (Linux)
-
-For comparable cross-stack numbers, run on a clean Linux box with dedicated CPU:
-
-| Provider | SKU | Cores / RAM | Hourly |
-|---|---|---|---|
-| **Hetzner Cloud** | CCX33 (AMD dedicated) | 16 vCPU / 64 GB | ~€0.10 |
-| AWS EC2 | c7i.4xlarge | 16 vCPU / 32 GB | ~$0.71 |
-| DigitalOcean | CPU-Optimized 8GP | 8 vCPU / 16 GB | $0.36 |
-
-Recommended: Hetzner CCX33 — dedicated cores, hourly billing, one-line
-provision via cloud-init.
-
-**One-shot run** (pastes the suite onto a fresh Ubuntu 24.04 VM, builds
-every stack, benches, leaves results at `/opt/bench-results.tgz`):
-
-1. Create the VM with `.dist/cloud-init.yaml` as user data.
-2. Wait ~45 min (`tail -f /var/log/bench-setup.log` on SSH).
-3. `scp root@<ip>:/opt/bench-results.tgz .` and tear down the VM.
-
-**Manual / iterative**:
-
-```bash
-# On the Linux box, as root or via sudo:
-git clone https://github.com/Nodirbek-Abdulaxadov/http-framework-benchmark.git
-git clone https://github.com/Nodirbek-Abdulaxadov/jwc-lang.git /opt/jwc-lang
-cd http-framework-benchmark
-bash .dist/setup-linux.sh        # installs Go / Rust / .NET / Node / Python, builds all
-bash .dist/bench-all.sh          # 8 stacks × 8 endpoints × 15s
-```
-
-Results land under `.dist/results/<stack>/<endpoint>.json` — same layout
-as the Windows PowerShell variant. Either run `.dist/report.ps1` from a
-Windows machine or write a small jq pipeline to roll them up.

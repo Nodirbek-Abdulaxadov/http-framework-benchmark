@@ -1,4 +1,4 @@
-$ROOT = "C:\Users\nbkab\OneDrive\Ishchi stol\bench"
+$ROOT = Split-Path -Parent $PSScriptRoot
 $SCRIPT = Join-Path $ROOT ".dist\bench.ps1"
 
 $servers = @(

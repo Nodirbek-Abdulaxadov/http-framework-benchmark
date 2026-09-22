@@ -3,14 +3,23 @@ param(
     [Parameter(Mandatory=$true)][string]$StartCmd,
     [Parameter(Mandatory=$true)][string]$WorkDir,
     [int]$Port = 8080,
-    # jwc's native binary binds [::] and Windows defaults IPV6_V6ONLY to on, so
-    # it is only reachable over IPv6. Everything else listens on 0.0.0.0.
+    # Only needed for a server that does not listen on IPv4 — e.g. jwc's native
+    # binary up to v0.8.0, which bound [::] with Windows' default IPV6_V6ONLY
+    # on. JWC binds dual-stack from 1.0.1 on.
     [string]$BindHost = '127.0.0.1'
 )
 
 $ErrorActionPreference = 'Stop'
-$BOMB = "C:\Users\nbkab\OneDrive\Ishchi stol\bench\.dist\bombardier.exe"
-$RESULTS = "C:\Users\nbkab\OneDrive\Ishchi stol\bench\.dist\results"
+# Resolve everything from this script's own location so the suite runs from any
+# checkout path. bombardier comes from .dist/ when vendored there, otherwise
+# from PATH (`go install github.com/codesenberg/bombardier@latest`).
+$BOMB = Join-Path $PSScriptRoot 'bombardier.exe'
+if (-not (Test-Path $BOMB)) {
+    $cmd = Get-Command bombardier -ErrorAction SilentlyContinue
+    if (-not $cmd) { throw "bombardier not found in $PSScriptRoot or on PATH" }
+    $BOMB = $cmd.Source
+}
+$RESULTS = Join-Path $PSScriptRoot 'results'
 $OUT_DIR = Join-Path $RESULTS $Name
 New-Item -ItemType Directory -Force -Path $OUT_DIR | Out-Null
 

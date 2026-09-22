@@ -1,7 +1,7 @@
 param([int]$Runs = 3)
 
 $ErrorActionPreference = 'Continue'
-$ROOT     = 'C:\Users\nbkab\OneDrive\Ishchi stol\bench'
+$ROOT     = Split-Path -Parent $PSScriptRoot
 $BOMB     = "$ROOT\.dist\bombardier.exe"
 $RESULTS  = "$ROOT\.dist\results"
 

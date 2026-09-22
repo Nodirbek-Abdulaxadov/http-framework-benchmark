@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Continue'
-$ROOT = 'C:\Users\nbkab\OneDrive\Ishchi stol\bench'
+$ROOT = Split-Path -Parent $PSScriptRoot
 $BOMB = "$ROOT\.dist\bombardier.exe"
 $EXE  = "$ROOT\_my\jwc-app\bin\release\jwc-app.exe"
 $DIR  = "$ROOT\_my\jwc-app"
