@@ -382,6 +382,100 @@ request rate and can include failed attempts.
 
 ---
 
+## Overall Rating
+
+Both runs scored together. On each endpoint a stack scores its `2xx/s` as a
+share of that endpoint's winner, so the winner scores 1.00. The per-OS column
+is the **geometric mean** of those eight shares — geometric, because the
+endpoints span five orders of magnitude and an arithmetic mean would let
+`/ping` decide the whole table. **Overall** is the geometric mean of the two
+OS columns, so a stack has to show up on both to score well.
+
+| # | Stack | Linux | Windows | Overall | Win ÷ Linux | 1st places (of 16) |
+|---|---|---:|---:|---:|---:|---:|
+| 1 | **go-fiber** | 72.0 | **76.6** | **74.3** | 1.06 | **9** |
+| 2 | **rust-axum** | **92.4** | 51.7 | 69.1 | 0.56 | 6 |
+| 3 | **jwc-app** ⭐ | 74.4 | 46.6 | 58.9 | 0.63 | 0 |
+| 4 | **dotnet-minimal** | 45.0 | 53.2 | 48.9 | 1.18 | 1 |
+| 5 | **liteapi-rust** ⭐ | 40.6 | 21.1 | 29.3 | 0.52 | 0 |
+| 6 | **liteapi-managed** ⭐ | 13.9 | 17.6 | 15.6 | 1.27 | 0 |
+| 7 | **node-fastify** | 10.3 | 9.8 | 10.1 | 0.95 | 0 |
+| 8 | **python-fastapi** | 2.5 | 2.7 | 2.6 | 1.07 | 0 |
+
+### Windows ÷ Linux throughput, per endpoint
+
+| Stack | `/ping` | `/json-small` | `/json-large` | `/cpu` | `/async-delay` | `/db` | `/queries` | `/updates` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| **go-fiber** | 0.88 | 0.91 | 0.66 | 0.91 | **1.03** | 0.60 | 0.62 | 0.91 |
+| **rust-axum** | 0.20 | 0.19 | 0.67 | 0.64 | 0.73 | 0.37 | 0.35 | 0.63 |
+| **jwc-app** ⭐ | 0.19 | 0.20 | **1.12** | 0.95 | 0.72 | 0.35 | 0.34 | 0.68 |
+| **dotnet-minimal** | 0.88 | 0.93 | **1.34** | 0.91 | 0.65 | **1.02** | 0.61 | 0.95 |
+| **liteapi-rust** ⭐ | 0.12 | 0.14 | 0.80 | 0.83 | 0.14 | 0.68 | 0.59 | 0.90 |
+| **liteapi-managed** ⭐ | 0.64 | **1.06** | **2.08** | **1.18** | 0.72 | 0.67 | 0.85 | **1.01** |
+| **node-fastify** | 0.67 | 0.71 | 0.88 | **1.44** | 0.45 | 0.67 | 0.71 | 0.50 |
+| **python-fastapi** | **1.16** | **1.16** | 0.74 | 0.62 | 0.94 | 0.88 | 0.62 | 0.54 |
+
+Read the last two columns together. `Win ÷ Linux` is how much of a stack's
+Linux throughput survives the move to Windows; `1st places` counts endpoint
+wins across both runs, out of 8 endpoints × 2 operating systems.
+
+## Conclusion
+
+**go-fiber is the only stack that is fast on both.** It takes 9 of the 16
+endpoint firsts, never places below 4th on any endpoint on either OS, and
+carries 1.06× of its Linux throughput into Windows. It is not the fastest
+thing here on Linux — rust-axum beats it on five endpoints — but it is the
+only entry with no bad case. For a target OS you do not control, that is the
+pick.
+
+**rust-axum wins Linux outright and gives up nearly half of it on Windows.**
+92.4 → 51.7, a 0.56 ratio. On Linux it is first on `/ping`, `/json-small`,
+`/json-large`, `/cpu` and `/updates`; on Windows only `/cpu` survives. `/cpu`
+is worth separating out: rust-axum wins it on both OSes and by a wide margin
+(6,052 and 3,875 `2xx/s`, against go-fiber's 1,154 and 1,052), so for
+compute-bound work the OS gap barely matters.
+
+**The three Rust-accept-path stacks all collapse on the two cheapest
+endpoints under Windows.** rust-axum, jwc-app and liteapi-rust keep only
+0.12–0.20 of their Linux `/ping` and `/json-small` throughput, while go-fiber
+and dotnet-minimal keep 0.88–0.93 on the same hardware and the same client.
+The effect tracks the accept path, not the framework: it disappears on
+`/json-large`, `/cpu` and `/updates`, where per-request work dominates and
+liteapi-rust reaches 0.80–0.90. liteapi-rust also refuses 1.16 M dials on
+`/ping`, while liteapi-managed — the same handlers, the same `LiteAPI.Core`,
+only `Run()` instead of `RunWithRust()` — refuses none. A common cause is
+plausible but not established by these runs; pinning it down would take a
+syscall-level trace.
+
+**dotnet-minimal is the most portable of the fast stacks.** 1.18× on Windows,
+and it wins `/json-large` there — the only endpoint go-fiber or rust-axum does
+not take. Its weakness is `/cpu`, where it lands at 91 and 83 `2xx/s`, two
+orders of magnitude behind rust-axum.
+
+**jwc-app never places first but is rarely far off.** Top-3 on 9 of 16
+endpoints and top-4 on 13, with an overall score above dotnet-minimal. Its
+Windows profile tracks rust-axum's closely, which is what a tokio/axum backend
+should look like. Its weak spot is the DB tier on Windows — 5th on `/db`,
+6th on `/queries` and `/updates` — where it trails rust-axum on every one.
+
+**node-fastify and python-fastapi are not in the same class.** Overall 10.1
+and 2.6. python-fastapi places last on 14 of the 16 endpoints; the two it
+does not lose are both `/cpu`, where node-fastify is worse still — a blocked
+event loop leaves it at 9 and 13 `2xx/s`. Neither is a throughput choice, and
+`/cpu` in particular should not be served from either without moving the work
+off the request thread.
+
+### How far to trust this
+
+One 15 s sample per endpoint per stack, all on loopback on a single box, with
+no repetition — so the run-to-run spread is unmeasured. Gaps of a few percent
+here are noise; the table is meaningful at the 2× level and above. Loopback
+also removes the network, which flatters every stack unevenly: the cheap
+endpoints are the ones most exposed to that, and they are exactly where the
+Linux–Windows gaps are widest.
+
+---
+
 ## Reproduce
 
 ```powershell
